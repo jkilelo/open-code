@@ -1,3 +1,25 @@
+# MVP spec — v0.7.0 (Skills)
+
+> v0.7.0 (2026-05-11) implements Tier 1 #3 from
+> `roadmap/PROMPT-PACK.md`: Claude Code-style skills under
+> `.open-code/skills/<name>/SKILL.md`.
+>
+> New file: `skills.py` (188 lines).
+>
+> ## v0.7 new assertions
+>
+> A22 SKILL.md frontmatter parses name / description / allowed-tools
+>     / disable-model-invocation; missing fields fall back gracefully
+>     (e.g. dir name when `name:` absent).
+> A23 `$ARGUMENTS` substitutes to the whole arg string; `$1..$9`
+>     substitute to shlex-split positionals.
+> A24 `` !`cmd` `` blocks in the body run via subprocess and their
+>     stdout replaces the marker before the model sees the prompt.
+>     20-second timeout per block; errors become text in the marker
+>     position, not crashes.
+> A25 `/skills` REPL command lists discovered skills sorted by dir
+>     name; `/skill <name> [args]` invokes one as the next user turn.
+
 # MVP spec — v0.6.0 (Settings + permission rules)
 
 > v0.6.0 (2026-05-10) implements Tier 1 #2 from

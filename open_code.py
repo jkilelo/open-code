@@ -586,6 +586,7 @@ def run_loop(
                     if settings.hooks_disabled:
                         class _NoHook:
                             block = False
+                            reason = ""
                             modified_args = None
                         pre = _NoHook()  # type: ignore[assignment]
                     else:
@@ -723,6 +724,8 @@ Slash commands:
   /cost              show cumulative cost for this session
   /model <name>      switch the model used for subsequent turns
   /dump              print the path of the JSONL transcript
+  /skills            list skills under .open-code/skills/
+  /skill <n> [args]  run a skill by name; $ARGUMENTS / $1.. interpolated
 
 @-file references in prompts:
   Reference any local file with @path/to/file. open-code reads it and
@@ -850,8 +853,35 @@ def run_repl(
             if cmd == "dump":
                 print(session.path)
                 continue
-            print(f"unknown command: /{cmd}. /help for the list.")
-            continue
+            if cmd == "skills":
+                import skills as _skills
+                print(_skills.render_skill_listing(_skills.discover_skills(cwd)))
+                continue
+            if cmd == "skill":
+                if not rest:
+                    print("usage: /skill <name> [args...]")
+                    continue
+                import skills as _skills
+                parts = rest.split(maxsplit=1)
+                skill_name = parts[0]
+                skill_args = parts[1] if len(parts) > 1 else ""
+                sk = _skills.find_skill_by_name(cwd, skill_name)
+                if sk is None:
+                    print(f"no skill named {skill_name!r}; try /skills")
+                    continue
+                expanded = _skills.expand_skill_body(sk, skill_args, cwd)
+                if not quiet:
+                    print(
+                        f"[invoking skill {skill_name!r} "
+                        f"({len(expanded)} chars expanded)]",
+                        file=sys.stderr,
+                    )
+                # Treat expanded body as the user's prompt for the next turn.
+                line = expanded
+                # Fall through to UserPromptSubmit + run_loop below.
+            else:
+                print(f"unknown command: /{cmd}. /help for the list.")
+                continue
 
         # UserPromptSubmit hook: can transform or block the prompt.
         import hooks as _hooks

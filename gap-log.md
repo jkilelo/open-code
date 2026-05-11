@@ -105,6 +105,16 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 ---
 
+## v0.7.0 — 2026-05-11 (#3 Skills)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#3** | **Skills system** (`.open-code/skills/<name>/SKILL.md` with frontmatter, `$ARGUMENTS` / `$1..$N`, `` !`cmd` `` dynamic blocks; `/skill` + `/skills` REPL commands) | ✅ | `tests/probe_skills.py` 9/9; live REPL: `/skill summarize-file README.md` → model produced 2-sentence summary with zero tool calls (content arrived via `` !`cat $1` ``) |
+
+**v0.7.0 ships 🟢.**
+
+---
+
 ## Carried gaps (still ⚪)
 
 - ⚪ Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save)
