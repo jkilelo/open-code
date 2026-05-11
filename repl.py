@@ -50,6 +50,8 @@ Slash commands:
   /checkpoint [label] take a manual snapshot now (use after a risky edit)
   /restore <ref>     restore working tree to a prior checkpoint (DESTRUCTIVE; confirms)
   /undo [N]          restore to the start of the Nth-most-recent turn (default N=1)
+  /loop <interval> <task>    repeat a task every <interval> (e.g. 30, 5m, 1h). Ctrl-C to stop.
+  /schedule <delay> <task>   run a task once after <delay> (e.g. 60, 10m, 2h). Ctrl-C cancels.
   /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
   /plan <task>       run <task> in plan mode (read-only); save result as a plan event
   /act [task]        load most recent plan; switch to acceptEdits; execute
@@ -555,6 +557,79 @@ def run_repl(
                 else:
                     settings.mode = rest
                 print(f"[mode set to {rest!r}]")
+                continue
+            if cmd in ("loop", "schedule"):
+                # Tier 2 #24: /loop and /schedule
+                import schedule as _sched
+                parts = rest.split(maxsplit=1)
+                if len(parts) < 2:
+                    print(f"usage: /{cmd} <duration> <task>")
+                    continue
+                duration_str, task_text = parts[0], parts[1]
+                try:
+                    secs = _sched.parse_duration(duration_str)
+                except ValueError as exc:
+                    print(f"[bad duration: {exc}]")
+                    continue
+
+                def _make_cb(t: str):
+                    """Returns a callback(iter_n) -> bool that runs `task_text` once."""
+                    def cb(iter_n: int) -> bool:
+                        nonlocal history, current_model
+                        if not quiet:
+                            print(f"\n[/{cmd} iter {iter_n}: {t[:80]}]",
+                                  file=sys.stderr)
+                        task_expanded, _refs = expand_file_refs(t, cwd)
+                        try:
+                            exit_code, metrics = run_loop(
+                                task=task_expanded,
+                                model=current_model, api_key=api_key,
+                                max_iterations=max_iterations,
+                                store=store, session=session,
+                                initial_history=history,
+                                verbose=not quiet, stream=stream,
+                                system_instruction=system_instruction,
+                                fire_session_start=False,
+                                settings=settings, is_repl=True,
+                            )
+                        except KeyboardInterrupt:
+                            return False
+                        history, _ = store.load_history(session, resume_max_messages)
+                        if metrics.get("model") and metrics["model"] != current_model:
+                            current_model = metrics["model"]
+                        return True  # keep looping (only used by /loop)
+                    return cb
+
+                if cmd == "loop":
+                    if not quiet:
+                        print(
+                            f"[/loop starting; interval={duration_str} ({secs:g}s); Ctrl-C to stop]",
+                            file=sys.stderr,
+                        )
+                    stats = _sched.run_loop_with_interval(
+                        _make_cb(task_text), secs,
+                    )
+                    if stats.interrupted:
+                        print(f"[/loop interrupted after {stats.iterations} iteration(s)]")
+                    elif stats.early_stopped:
+                        print(f"[/loop stopped early after {stats.iterations} iteration(s)]")
+                    else:
+                        print(f"[/loop completed {stats.iterations} iteration(s)]")
+                    if stats.errors:
+                        print(f"  errors: {len(stats.errors)}")
+                else:  # /schedule
+                    if not quiet:
+                        print(
+                            f"[/schedule sleeping {duration_str} ({secs:g}s); Ctrl-C to cancel]",
+                            file=sys.stderr,
+                        )
+                    stats = _sched.run_schedule_delayed(
+                        _make_cb(task_text), secs,
+                    )
+                    if stats.interrupted:
+                        print("[/schedule cancelled before run]")
+                    else:
+                        print("[/schedule completed]")
                 continue
             if cmd == "skill":
                 if not rest:

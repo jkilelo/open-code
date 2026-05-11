@@ -319,6 +319,44 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.23.0 ships 🟢.** Tier 2: 14 of 15 features done. **One left: #24 (/loop+/schedule).**
 
+---
+
+## v0.24.0 — 2026-05-11 (Tier 2 #24 — TIER 2 COMPLETE 🎉)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#24** | **/loop + /schedule** (REPL-blocking; `parse_duration` accepts `30`/`30s`/`5m`/`1h`/`2.5m`; `run_loop_with_interval(cb, secs, max_iter, sleep=injected)`; `run_schedule_delayed(cb, secs, sleep=injected)`; SchedulerStats dataclass; KeyboardInterrupt during callback OR during pre-callback sleep cancels cleanly; non-KbInt exceptions recorded in `stats.errors`, loop continues; REPL `/loop <dur> <task>` and `/schedule <dur> <task>` slash commands share session state across iterations) | ✅ | `tests/probe_schedule.py` 7/7: parse_duration suffix handling + junk rejection, max_iterations cap honored with injected sleep called exactly N-1 times, early-stop on callback False, KbInt mid-callback flagged interrupted, RuntimeError mid-loop recorded but loop continues, schedule sleeps once then runs once, KbInt during pre-callback sleep cancels with iterations=0 |
+
+**v0.24.0 ships 🟢.** **Tier 2 complete: 15 of 15 features done.**
+
+## 🎉 Tier 2 final scoreboard
+
+| # | Feature | Version |
+|---|---------|---------|
+| #11 | Shadow-git checkpointing | v0.16 |
+| #12 | Atomic-commit per turn (/undo) | v0.17 |
+| #13 | /compact slash command | v0.15.1 |
+| #14 | Status line | v0.15 |
+| #15 | Effort levels | v0.15 |
+| #16 | Ultrathink | v0.15 |
+| #17 | Sticky permissions | v0.18 |
+| #18 | Four-tier memory | v0.15 |
+| #19 | Extended @-providers | v0.15.1 |
+| #20 | `--print` JSON output | v0.19 |
+| #21 | Skill prompt caching | v0.22 |
+| #22 | Plugin system | v0.23 |
+| #23 | Output styles | v0.21 |
+| #24 | /loop + /schedule | v0.24 |
+| #25 | Managed settings | v0.20 |
+
+## v0.14 → v0.24 (Tier 2 summary)
+
+- Modules: 12 → 16
+- LOC: ~4300 → ~5780
+- Probes: 20 → 40
+- Tier 2 commits: 11 (one per feature batch; no rebases)
+- Every release: spec + probe + gap-log + runs doc
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)
