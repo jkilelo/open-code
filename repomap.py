@@ -186,16 +186,22 @@ def pagerank(
     if not nodes:
         return {}
     n = len(nodes)
-    # Initial: uniform; bumped on personalization set
-    perso_weight = 0.0
-    if personalization:
-        perso_weight = 1.0 / max(len(personalization), 1)
-    scores: dict[Path, float] = {}
-    for p in nodes:
-        if personalization and p in personalization:
-            scores[p] = perso_weight
-        else:
-            scores[p] = 1.0 / n
+
+    # Build a proper personalization PROBABILITY DISTRIBUTION v[p]
+    # over ALL nodes summing to 1. If a personalization set was passed,
+    # all mass goes to those nodes equally; otherwise uniform.
+    perso_set = set(personalization) if personalization else set()
+    perso_set &= set(nodes)  # ignore unknown nodes
+    if perso_set:
+        v: dict[Path, float] = {
+            p: (1.0 / len(perso_set) if p in perso_set else 0.0) for p in nodes
+        }
+    else:
+        v = {p: 1.0 / n for p in nodes}
+
+    # Initial scores: uniform (converges to the same fixed point either way).
+    scores: dict[Path, float] = {p: 1.0 / n for p in nodes}
+
     # Reverse edges for the propagation step
     incoming: dict[Path, list[Path]] = {p: [] for p in nodes}
     out_degree: dict[Path, int] = {p: len(edges[p]) for p in nodes}
@@ -203,22 +209,20 @@ def pagerank(
         for tgt in targets:
             if tgt in incoming:
                 incoming[tgt].append(src)
-    # Iterate. Dangling nodes (out_degree==0) leak mass; redistribute it.
+
+    # Iterate. Dangling nodes (out_degree==0) leak mass; redistribute it
+    # along v (not uniformly — that's the personalized-PageRank rule).
     for _ in range(iterations):
         dangling_mass = sum(scores[p] for p in nodes if out_degree[p] == 0)
-        dangling_share = damping * dangling_mass / n
         new_scores: dict[Path, float] = {}
         for p in nodes:
-            tele = (
-                (1 - damping) * (perso_weight if personalization and p in personalization
-                                 else 1.0 / n)
-            )
+            tele = (1 - damping) * v[p]
             contrib = 0.0
             for src in incoming[p]:
                 deg = out_degree[src]
                 if deg > 0:
                     contrib += scores[src] / deg
-            new_scores[p] = tele + damping * contrib + dangling_share
+            new_scores[p] = tele + damping * contrib + damping * dangling_mass * v[p]
         scores = new_scores
     return scores
 

@@ -31,16 +31,23 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import subprocess
 import sys
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
 
 # Protocol version we advertise during initialize.
 PROTOCOL_VERSION = "2024-11-05"
-# Per-call timeout for blocking JSON-RPC reads.
+# Per-call timeout for blocking JSON-RPC reads (now actually enforced).
 CALL_TIMEOUT_SECS = 60
+# Sentinel value pushed onto the per-server queue when the server's
+# stdout closes — lets `_call` distinguish "no reply yet" from "server
+# is gone."
+_EOF_SENTINEL = object()
 
 
 @dataclass
@@ -53,6 +60,12 @@ class MCPServer:
     next_id: int = 1
     tools: list[dict[str, Any]] = field(default_factory=list)
     last_error: str | None = None
+    # The reader thread pushes parsed JSON messages here so `_call`
+    # can do a Queue.get with a real timeout. Without this, `readline`
+    # would block forever on a server that ACKs but never replies.
+    out_queue: "queue.Queue[Any]" = field(default_factory=queue.Queue)
+    reader_thread: threading.Thread | None = None
+    reader_stop: threading.Event = field(default_factory=threading.Event)
 
 
 class MCPClient:
@@ -114,6 +127,36 @@ class MCPClient:
             env=merged_env,
             bufsize=1,
         )
+        # Start a daemon reader thread that drains stdout into the queue.
+        # This lets `_call` wait with a real timeout instead of blocking
+        # forever on a hung server.
+        srv.reader_thread = threading.Thread(
+            target=self._reader_loop, args=(srv,), daemon=True,
+            name=f"mcp-reader-{srv.name}",
+        )
+        srv.reader_thread.start()
+
+    def _reader_loop(self, srv: MCPServer) -> None:
+        """Drain server stdout into srv.out_queue. Runs in a daemon thread."""
+        proc = srv.proc
+        if proc is None or proc.stdout is None:
+            srv.out_queue.put(_EOF_SENTINEL)
+            return
+        try:
+            for line in proc.stdout:
+                if srv.reader_stop.is_set():
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                srv.out_queue.put(msg)
+        except (ValueError, OSError):
+            pass
+        srv.out_queue.put(_EOF_SENTINEL)
 
     def _initialize(self, srv: MCPServer) -> None:
         resp = self._call(srv, "initialize", {
@@ -137,35 +180,46 @@ class MCPClient:
     # ---- IO ----
 
     def _call(self, srv: MCPServer, method: str,
-              params: dict[str, Any]) -> dict[str, Any]:
-        """Send a JSON-RPC request; block for the matching response."""
-        if srv.proc is None or srv.proc.stdin is None or srv.proc.stdout is None:
+              params: dict[str, Any],
+              timeout: float | None = None) -> dict[str, Any]:
+        """Send a JSON-RPC request; wait for the matching response with a
+        real wall-clock deadline. Reader thread drains stdout into the
+        queue so a hung server can't block this call indefinitely.
+
+        `timeout=None` (default) reads CALL_TIMEOUT_SECS at call time so
+        tests / users that mutate the module global between definition
+        and call get the updated value.
+        """
+        if srv.proc is None or srv.proc.stdin is None:
             raise RuntimeError("server process not initialized")
+        eff_timeout = CALL_TIMEOUT_SECS if timeout is None else timeout
         msg_id = srv.next_id
         srv.next_id += 1
         req = {"jsonrpc": "2.0", "method": method,
                "params": params, "id": msg_id}
         srv.proc.stdin.write(json.dumps(req) + "\n")
         srv.proc.stdin.flush()
-        # Drain stdout until we find the matching response or hit timeout.
-        # We use a poll-like loop with readline; subprocess stdout is
-        # line-buffered (bufsize=1).
+        deadline = time.monotonic() + eff_timeout
         while True:
-            line = srv.proc.stdout.readline()
-            if not line:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"MCP call {method!r} on server {srv.name!r} "
+                    f"timed out after {eff_timeout}s"
+                )
+            try:
+                msg = srv.out_queue.get(timeout=min(remaining, 1.0))
+            except queue.Empty:
+                continue  # loop, check deadline
+            if msg is _EOF_SENTINEL:
                 stderr = ""
                 try:
                     stderr = srv.proc.stderr.read() if srv.proc.stderr else ""
                 except Exception:
                     pass
-                raise RuntimeError(f"server closed stdout; stderr: {stderr[:300]!r}")
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                msg = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+                raise RuntimeError(
+                    f"server {srv.name!r} closed stdout; stderr: {stderr[:300]!r}"
+                )
             if isinstance(msg, dict) and msg.get("id") == msg_id:
                 return msg
             # else: notification or out-of-order — drop for now
@@ -246,6 +300,7 @@ class MCPClient:
         self.servers.clear()
 
     def _terminate(self, srv: MCPServer) -> None:
+        srv.reader_stop.set()
         if srv.proc is None:
             return
         try:

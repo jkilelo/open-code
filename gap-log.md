@@ -184,6 +184,40 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 **v0.14.0 ships 🟢.** 🎉 **All 10 Tier 1 features complete.**
 
+---
+
+## v0.14.1 — 2026-05-11 (brutal-review blockers closed)
+
+The brutal review of v0.14.0 returned **PASS WITH BLEMISHES** with 3
+real blockers. v0.14.1 closes them.
+
+| Blocker | Type | Status | Evidence |
+|---------|------|--------|----------|
+| **apply_patch silent miswrite** (substring anchor + rstrip early-break in `patches.py`) | 🔴 corruption | ✅ closed | `tests/probe_apply_patch_misanchor.py` (hard pass/fail): `@@ def foo` no longer matches `def foo_helper`; ambiguous rstrip-fallback now refuses with clear error |
+| **MCP `_call` hang** (CALL_TIMEOUT_SECS defined but never used) | 🔴 hang | ✅ closed | `tests/probe_mcp_hang.py` (hard pass/fail): silent server's `tools/call` returns `TimeoutError` after the configured timeout instead of hanging forever |
+| **PageRank personalization sums to >1** (`repomap.py` teleport mass leak under personalization) | 🟡 algorithmic | ✅ closed | `tests/probe_pagerank_bug.py` (hard pass/fail): sum=1.0000 under personalization; m0 now properly ranks higher when personalized on m0 |
+
+**v0.14.1 ships 🟢.** Tier 1 honestly complete.
+
+## Carried 🟡 gaps (brutal review's "small" tier — deferred to v0.15)
+
+These survived the v0.14.1 cut because they're documented behavior gaps,
+not corruption / hang / correctness bugs:
+
+- **Skills YAML edge cases** — hand-rolled frontmatter parser silently
+  mishandles quoted strings, dash-lists, `|` block scalars, missing
+  close fence. Probe: `tests/probe_skills_yaml_edges.py`.
+- **`--architect` / `--editor` flags dead in one-shot mode** — only
+  consulted by `/plan` and `/act` slash commands. Either wire one-shot
+  auto-routing or walk back the v0.10 commit message.
+- **Hook security** — `.open-code/hooks/` runs with no per-project trust
+  prompt. RCE-by-`cd`-into-hostile-repo possible. Probe:
+  `tests/probe_hook_security.py`. Needs first-run consent + persisted
+  trusted-projects list.
+- **`bypassPermissions` doesn't imply --allow-outside-cwd / --allow-dangerous**
+  — the hard guards in `tools.py` still bite in bypass mode. PROMPT-PACK
+  A26 may have been wrong; intent should be documented.
+
 ## Tier 1 final scoreboard
 
 | # | Feature | Version |

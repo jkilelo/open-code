@@ -37,6 +37,7 @@ the same way `tool_write_file` does.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -224,40 +225,53 @@ def _apply_hunk(file_lines: list[str], hunk: Hunk) -> tuple[list[str], str | Non
     if not before:
         return file_lines, "hunk had no `-` or context lines to anchor on"
 
-    # If anchors are present, narrow search to lines AT OR AFTER the
-    # first anchor's match. (Stacked anchors progressively narrow.)
+    # Anchors narrow the search window. Each anchor must match EXACTLY
+    # ONE line (after stripping leading indentation) — the line either
+    # equals the anchor, or starts with the anchor followed by a
+    # word-boundary character (so `def foo` matches `def foo(...):`
+    # but NOT `def foo_helper(...):`).
     start_idx = 0
     for anchor in hunk.anchors:
-        anchor_stripped = anchor.rstrip()
-        positions = [
-            i for i in range(start_idx, len(file_lines))
-            if file_lines[i].rstrip() == anchor_stripped
-            or (anchor_stripped and anchor_stripped in file_lines[i])
-        ]
+        anchor_stripped = anchor.strip()
+        if not anchor_stripped:
+            continue
+        anchor_re = re.compile(
+            r"^" + re.escape(anchor_stripped) + r"(?:\b|$)"
+        )
+        positions: list[int] = []
+        for i in range(start_idx, len(file_lines)):
+            line_lstripped = file_lines[i].lstrip()
+            if (line_lstripped == anchor_stripped
+                    or anchor_re.search(line_lstripped)):
+                positions.append(i)
         if not positions:
             return file_lines, f"anchor not found: {anchor!r}"
         if len(positions) > 1:
-            # Take the earliest; further anchors / before pattern will
-            # disambiguate.
-            start_idx = positions[0] + 1
-        else:
-            start_idx = positions[0]
+            return file_lines, (
+                f"anchor {anchor!r} matches {len(positions)} lines "
+                "(ambiguous). Add more @@ context to disambiguate, or "
+                "extend the anchor to include the full line."
+            )
+        start_idx = positions[0]
 
-    # Locate `before` as a contiguous block from `start_idx`.
+    # Locate `before` as a contiguous block from `start_idx`. Collect
+    # ALL strict matches (don't short-circuit on the first) so we can
+    # detect ambiguity.
     matches: list[int] = []
     if before:
         for i in range(start_idx, len(file_lines) - len(before) + 1):
             if all(file_lines[i + j] == before[j] for j in range(len(before))):
                 matches.append(i)
     if not matches:
-        # Try a forgiving match (rstrip both sides) to handle trailing whitespace
+        # Forgiving fallback: rstrip both sides (tolerates trailing
+        # whitespace differences). Collect ALL matches — the original
+        # code broke on the first, hiding ambiguity.
         for i in range(start_idx, len(file_lines) - len(before) + 1):
             if all(
                 file_lines[i + j].rstrip() == before[j].rstrip()
                 for j in range(len(before))
             ):
                 matches.append(i)
-                break
     if not matches:
         return file_lines, (
             f"hunk pattern not found in file (after anchors). "
