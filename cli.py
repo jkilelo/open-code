@@ -134,11 +134,11 @@ def main(argv: list[str] | None = None) -> int:
     # so we defer to avoid a cycle at module-load time.
     from open_code import (
         run_loop,
-        run_repl,
         load_project_context,
         build_system_instruction,
         expand_file_refs,
     )
+    from repl import run_repl
 
     parser = build_parser()
     args = parser.parse_args(argv)
