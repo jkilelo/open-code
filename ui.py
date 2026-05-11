@@ -132,6 +132,10 @@ class UI:
         self.quiet = quiet
         self._stderr = stderr
         self._console: Any = None  # lazy rich.console.Console
+        # prompt_toolkit session is built lazily on first `prompt()` call.
+        # We cache it across calls so history + autosuggest stay coherent.
+        self._pt_session: Any = None
+        self._pt_available: bool | None = None  # tri-state cache
 
     @classmethod
     def auto(
@@ -326,6 +330,117 @@ class UI:
             "Type your task, /help for commands, /exit (or Ctrl+D) to leave.\n"
         )
         self._stream.write(out + "\n")
+
+    # ---- input side (prompt_toolkit) ----
+
+    def _try_pt(self) -> bool:
+        """Cache whether prompt_toolkit is usable in this UI.
+
+        Conditions for PT: rich mode AND stdin is a TTY AND the
+        prompt_toolkit module imports successfully. Otherwise we
+        fall back to the builtin `input()` (which on POSIX still has
+        readline-backed history + line editing because repl.py
+        imports `readline` at module load time).
+        """
+        if self._pt_available is not None:
+            return self._pt_available
+        if self.mode != MODE_RICH:
+            self._pt_available = False
+            return False
+        try:
+            if not sys.stdin.isatty():
+                self._pt_available = False
+                return False
+        except (AttributeError, OSError):
+            self._pt_available = False
+            return False
+        try:
+            import prompt_toolkit  # noqa: F401
+        except ImportError:
+            self._pt_available = False
+            return False
+        self._pt_available = True
+        return True
+
+    def _build_pt_session(self, history_file: Any) -> Any:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+        from prompt_toolkit.history import FileHistory, InMemoryHistory
+        if history_file is not None:
+            try:
+                # Ensure parent dir exists; PT will create the file lazily.
+                history_file.parent.mkdir(parents=True, exist_ok=True)
+                history = FileHistory(str(history_file))
+            except OSError:
+                history = InMemoryHistory()
+        else:
+            history = InMemoryHistory()
+        return PromptSession(
+            history=history,
+            auto_suggest=AutoSuggestFromHistory(),
+            # Ctrl-R for reverse-i-search across history
+            enable_history_search=True,
+        )
+
+    def prompt(
+        self,
+        message: str = "> ",
+        *,
+        history_file: Any = None,
+        completions: list[str] | None = None,
+        multiline: bool = False,
+    ) -> str:
+        """Read one line (or multi-line block) of user input.
+
+        Raises:
+          EOFError on Ctrl-D
+          KeyboardInterrupt on Ctrl-C (caller decides how to handle)
+
+        Behavior by mode:
+          rich + TTY + PT installed -> prompt_toolkit session with
+            history file (FileHistory), AutoSuggestFromHistory,
+            Ctrl-R reverse-i-search, optional WordCompleter for slash
+            commands, optional multi-line (Esc-Enter for newline).
+          else -> builtin input() (readline auto-enabled by repl.py).
+        """
+        if not self._try_pt():
+            return input(message)
+        # The whole PT path is wrapped because PT can fail on terminal
+        # incompatibilities at any of three points:
+        #   (a) PromptSession construction (Win32Output errors in
+        #       MSYS / Git Bash / Cygwin where TERM=xterm-256color
+        #       but the underlying console is the Windows console)
+        #   (b) WordCompleter construction
+        #   (c) session.prompt() itself (rare; mostly bracketed-paste
+        #       quirks or environment-variable parsing)
+        # EOFError + KeyboardInterrupt propagate; everything else
+        # disables PT permanently and falls back to input().
+        try:
+            if self._pt_session is None:
+                self._pt_session = self._build_pt_session(history_file)
+            completer: Any = None
+            if completions:
+                from prompt_toolkit.completion import WordCompleter
+                completer = WordCompleter(
+                    completions, ignore_case=True, sentence=True,
+                )
+            return self._pt_session.prompt(
+                message,
+                completer=completer,
+                multiline=multiline,
+            )
+        except (EOFError, KeyboardInterrupt):
+            raise
+        except Exception:
+            self._pt_available = False
+            self._pt_session = None
+            return input(message)
+
+    def reset_input(self) -> None:
+        """Drop the cached PromptSession. Called after /clear so the
+        new session starts with a fresh in-memory history (the file
+        history is unaffected and persists across REPL launches)."""
+        self._pt_session = None
 
     def table(self, *, title: str, columns: list[str],
               rows: list[list[str]]) -> None:

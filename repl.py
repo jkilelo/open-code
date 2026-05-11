@@ -122,9 +122,28 @@ def run_repl(
     current_model = model
     history: list[types.Content] = list(initial_history)
 
+    # Slash commands offered as tab-completions in the prompt_toolkit
+    # path. Kept in sync with the dispatch below; missing ones just
+    # mean no autocompletion, not a broken command.
+    SLASH_COMMANDS = [
+        "/help", "/exit", "/quit", "/clear", "/sessions", "/switch",
+        "/cost", "/model", "/dump", "/skills", "/skill", "/agents",
+        "/compact", "/effort", "/style",
+        "/checkpoints", "/checkpoint", "/restore", "/undo",
+        "/mode", "/plan", "/act",
+        "/loop", "/schedule",
+    ]
+    # Persistent input history: ~/.open-code/history.txt. Survives
+    # across REPL launches so Up-arrow gives you yesterday's prompts.
+    _history_path = Path.home() / ".open-code" / "history.txt"
+
     while True:
         try:
-            line = input("> ").strip()
+            line = ui.prompt(
+                "> ",
+                history_file=_history_path,
+                completions=SLASH_COMMANDS,
+            ).strip()
         except EOFError:
             print()
             break

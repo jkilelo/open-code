@@ -439,6 +439,24 @@ User asked for a modern UI/UX with optional text-only mode. After researching th
 
 **v0.25.0 ships [OK].** 44/44 probes green; 54/54 security tests green; ASCII guard still green. prompt_toolkit input-side deferred to v0.26 if requested.
 
+---
+
+## v0.25.1 -- 2026-05-11 (prompt_toolkit input-side -- Aider-style stack complete)
+
+| Change | Status | Evidence |
+|--------|--------|----------|
+| `ui.UI.prompt()` -- routes through prompt_toolkit when available, falls back to `input()` otherwise | [OK] | `tests/probe_prompt_toolkit.py` 8/8 |
+| Persistent history at `~/.open-code/history.txt` (FileHistory) | [OK] | survives REPL launches |
+| Autosuggest from history (fish-shell ghost text) | [OK] | PT's `AutoSuggestFromHistory` |
+| Tab completion for slash commands | [OK] | `WordCompleter(SLASH_COMMANDS, sentence=True)` |
+| Ctrl-R reverse-i-search | [OK] | PT's `enable_history_search=True` |
+| Three-level fallback chain (PT -> readline+input -> raw input) | [OK] | probe Test 4 verifies; widened try/except covers session-construction failures |
+| `prompt_toolkit>=3.0.0` added to requirements (3 deps -> 4) | [OK] | pure Python, no compiled extensions |
+
+**Bug caught during probing**: initial impl only caught exceptions around `session.prompt()`, not around `PromptSession()` construction. Probe Test 2 ran under Git Bash where `TERM=xterm-256color` made `isatty()=True` but PT's Win32Output failed -- crashed with `NoConsoleScreenBufferError`. Widened try/except now covers session build + completer build + prompt(). Real-world impact: Windows users running open-code from Git Bash no longer crash on first prompt.
+
+**v0.25.1 ships [OK].** 45/45 probes green. Aider-style stack (rich + prompt_toolkit) complete.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)
