@@ -51,6 +51,39 @@ v0.2.1 closing 3 blockers within the next session`. This release does that.
 
 ---
 
+## v0.3.0 — 2026-05-10 (JSONL storage + Claude-Code design patterns)
+
+User asked: swap to JSONL + bring useful design patterns from Claude Code.
+
+| Change | Status | Evidence |
+|--------|--------|----------|
+| **JSONL storage** (file-per-session, `~/.open-code/projects/<encoded-cwd>/<uuid>.jsonl`) | ✅ shipped | [runs/2026-05-10-v0.3.0.md § On-disk JSONL](runs/2026-05-10-v0.3.0.md) |
+| **Migration from v0.2 SQLite** (renames old DB to `.migrated`) | ✅ shipped | runs § Migration — 2/2 sessions converted in test |
+| **`--resume-id <uuid>`** (Claude-Code-style specific-session resume) | ✅ shipped | runs § --resume-id |
+| **Cumulative cost across --resume chains** (closes carried gap #6) | ✅ shipped | runs § Cumulative metrics; live run: iters=3 → 4 → 5 as user --resumes |
+| **Audit log via events** (refusals + fallbacks logged) | ✅ shipped | sessions.py append_tool_refusal / append_fallback |
+| **Extract `sessions.py`** (v0.2.1 pre-commitment) | ✅ shipped | 970 + 479 = 1449 across 2 files; max single file under 1000 |
+| **Stream-error survivability** (carried gap #3) | 🟡 improved | Session header + user msg + end event survive; partial model text still doesn't (v0.4) |
+
+**v0.3.0 ships 🟢.**
+
+---
+
+## Carried gaps (still ⚪)
+
+- ⚪ Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save with rebuild logic on resume)
+- ⚪ Glyph rendering by terminal code page (cosmetic)
+- ⚪ Pyright `reportUnknownMemberType` warnings (cosmetic)
+- ⚪ Multi-LLM support (Mara persona trigger)
+- ⚪ Tool allowlist mode + `--ask` interactive permission prompts
+- ⚪ `--prune-sessions` (now Jeff can `rm ~/.open-code/projects/<cwd>/<uuid>.jsonl` directly)
+
+## Pre-commitment notes
+
+Single-file constraint formally relaxed in v0.3 (split into open_code.py + sessions.py). Per-file caps loosened to ≤ 1000 each. If v0.4 adds enough scope to push either file past 1000, extract again (likely candidates: `tools.py` for tool implementations, or `cli.py` for argparse).
+
+---
+
 ## Carried gaps (still ⚪ — deferred to v0.3+)
 
 From the brutal review's "embarrassed-to-show-them" list, items not in

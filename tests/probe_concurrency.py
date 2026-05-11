@@ -1,22 +1,22 @@
-"""Probe: two concurrent SQLite writers in the same CWD."""
+"""Probe: 4 concurrent JSONL writers, file-per-session (no contention)."""
 from __future__ import annotations
-import sys, threading, tempfile, time
+import sys, threading, tempfile, time, json
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from open_code import db_connect, session_create, message_save
+from sessions import SessionStore
 from google.genai import types
 
-dbp = Path(tempfile.mkdtemp(prefix="occonc-")) / "sessions.db"
+store_root = Path(tempfile.mkdtemp(prefix="occonc-"))
 errors = []
 
 def worker(idx: int):
     try:
-        c = db_connect(dbp)
-        sid = session_create(c, "/tmp/concurrent", "gemini-x", f"task {idx}")
+        store = SessionStore(store_root)
+        session = store.create("/tmp/concurrent", "gemini-x", f"task {idx}")
         for i in range(20):
             msg = types.Content(role="user", parts=[types.Part.from_text(text=f"w{idx} m{i}")])
-            message_save(c, sid, msg)
+            store.append_message(session, msg)
     except Exception as e:
         errors.append((idx, type(e).__name__, str(e)))
 
@@ -28,7 +28,17 @@ elapsed = time.perf_counter() - t0
 print(f"4 concurrent writers, 20 msgs each. Elapsed {elapsed:.2f}s.")
 print(f"Errors: {len(errors)}")
 for e in errors: print("  ", e)
-c = db_connect(dbp)
-n = c.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-s = c.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
-print(f"Final: {s} sessions, {n} messages (expected 4 sessions, 80 messages)")
+
+# Count files + total msgs across all sessions
+store = SessionStore(store_root)
+sessions = store.list_for_cwd("/tmp/concurrent")
+total_msgs = 0
+for s in sessions:
+    with s.path.open() as f:
+        for line in f:
+            try:
+                if json.loads(line).get("kind") == "msg":
+                    total_msgs += 1
+            except json.JSONDecodeError:
+                pass
+print(f"Final: {len(sessions)} sessions, {total_msgs} messages (expected 4 sessions, 80 messages)")

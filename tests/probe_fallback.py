@@ -40,25 +40,25 @@ if not api_key:
     sys.exit(0)
 
 print("\n=== Live fallback with bogus primary ===")
+from sessions import SessionStore
 tmp = Path(tempfile.mkdtemp(prefix="ocfallback-"))
 oc.CONFIG.cwd = tmp
 import os as _os
 _os.chdir(tmp)
 
-dbp = tmp / "sessions.db"
-conn = oc.db_connect(dbp)
-sid = oc.session_create(conn, str(tmp), "gemini-bogus-99-nonexistent", "test")
+store = SessionStore(tmp)
+session = store.create(str(tmp), "gemini-bogus-99-nonexistent", "test")
 
 code, metrics = oc.run_loop(
     task="reply with the single word PONG",
     model="gemini-bogus-99-nonexistent",
     api_key=api_key,
     max_iterations=3,
-    db_conn=conn,
-    session_id=sid,
+    store=store,
+    session=session,
     initial_history=[],
     verbose=True,
-    stream=False,  # easier to assert response cleanly
+    stream=False,
 )
 print(f"\nexit_code={code} final_model={metrics['model']!r}")
 assert code == 0, f"fallback did not recover: exit={code}"

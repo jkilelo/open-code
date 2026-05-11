@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import open_code as oc
+import sessions as sx
 from google.genai import types
 from unittest.mock import MagicMock
 
@@ -42,9 +43,9 @@ for p in parts:
 print(f"function_calls extracted: {len(fcs)}")
 # Now confirm both round-trip through content_to_dict / dict_to_content
 c = types.Content(role="model", parts=parts)
-d = oc.content_to_dict(c)
+d = sx.content_to_dict(c)
 print(f"serialized parts: {len(d['parts'])}")
 for p in d["parts"]:
     print(f"  {p}")
-c2 = oc.dict_to_content(d)
+c2 = sx.dict_to_content(d)
 print(f"deserialized parts: {len(c2.parts or [])}")

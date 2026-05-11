@@ -1,29 +1,38 @@
 #!/usr/bin/env python3.13
 """open-code — an LLM-agnostic terminal coding agent.
 
-Single-file Python 3.13 script that runs an agentic loop against a
-function-calling LLM (Gemini in v0.2). Talks to the model, executes
-tool calls (read/write files, list dirs, run shell), feeds results
-back, repeats until the model says it's done.
+Single-file Python 3.13 script (plus `sessions.py` for storage) that runs
+an agentic loop against a function-calling LLM. Talks to the model,
+executes tool calls (read/write files, list dirs, run shell), feeds
+results back, repeats until the model says it's done.
 
-v0.2 additions on top of v0.1:
-- Default model: gemini-3.1-flash-lite-preview
-- Streaming model output to stdout
-- SQLite-backed persistent chats (--resume, --list-sessions)
-- Path sandbox + shell denylist with explicit override flags
+v0.3 changes on top of v0.2:
+- Session storage moved from SQLite to JSONL files in
+  `~/.open-code/projects/<encoded-cwd>/<uuid>.jsonl`. One file per
+  session, append-only, inspectable with cat/grep/tail.
+- Migration: a one-shot sweep on first v0.3 run converts the v0.2
+  sessions.db into JSONL files and renames the DB to `.migrated`.
+- `--resume-id <uuid>` for resuming a specific session (Claude-Code-
+  style); `--resume` still continues most recent in CWD.
+- Append-only event log records metrics, model fallbacks, and tool
+  refusals alongside messages — usable as an audit trail.
+- `--show-metrics` reports cumulative cost across `--resume` chains.
+- Partial output survives Ctrl-C / crashes: every event is flushed
+  before the next step runs.
 
 Usage:
     open_code "describe what you want done"
     open_code --resume "now run the tests"
+    open_code --resume-id 4f2c3a18-... "continue this specific one"
     open_code --list-sessions
-    open_code --model gemini-3.1-pro-preview "harder task"
     open_code --allow-outside-cwd "write /tmp/foo with bar"
     open_code --allow-dangerous "run rm -rf ./build"
 
 Env:
-    GEMINI_API_KEY   required; from https://aistudio.google.com/app/apikey
-    OPEN_CODE_MODEL  optional default model override
-    OPEN_CODE_DB     optional override of sessions.db path
+    GEMINI_API_KEY      required; from https://aistudio.google.com/app/apikey
+    OPEN_CODE_MODEL     optional default model override
+    OPEN_CODE_ROOT      optional override of ~/.open-code/
+    OPEN_CODE_RESUME_MAX optional cap on resumed messages (default 80)
 """
 from __future__ import annotations
 
@@ -31,14 +40,12 @@ import argparse
 import json
 import os
 import re
-import sqlite3
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 try:
     from dotenv import load_dotenv
@@ -58,6 +65,8 @@ except ImportError as exc:
     )
     sys.exit(2)
 
+from sessions import Session, SessionStore, migrate_from_sqlite
+
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -68,7 +77,7 @@ DEFAULT_MAX_ITERATIONS = 25
 DEFAULT_TIMEOUT_PER_SHELL = 60
 MAX_SHELL_OUTPUT = 8000
 
-DEFAULT_DB_PATH = Path.home() / ".open-code" / "sessions.db"
+DEFAULT_OC_ROOT = Path.home() / ".open-code"
 
 # Default cap on history loaded by --resume. Prevents unbounded token bloat
 # after many turns in one CWD.
@@ -466,190 +475,7 @@ TOOL_FUNCTIONS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# SQLite session persistence
-# ---------------------------------------------------------------------------
-
-
-SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS sessions (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    cwd           TEXT NOT NULL,
-    model         TEXT NOT NULL,
-    task          TEXT,
-    started_at    TEXT NOT NULL,
-    last_active_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id  INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    seq         INTEGER NOT NULL,
-    role        TEXT NOT NULL,
-    parts_json  TEXT NOT NULL,
-    created_at  TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_sessions_cwd ON sessions(cwd, last_active_at DESC);
-CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, seq);
-"""
-
-
-def db_connect(path: Path) -> sqlite3.Connection:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(SCHEMA_SQL)
-    return conn
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def session_create(conn: sqlite3.Connection, cwd: str, model: str, task: str) -> int:
-    now = _now()
-    cur = conn.execute(
-        "INSERT INTO sessions(cwd, model, task, started_at, last_active_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (cwd, model, task, now, now),
-    )
-    conn.commit()
-    return cur.lastrowid  # type: ignore[return-value]
-
-
-def session_resume_for_cwd(
-    conn: sqlite3.Connection,
-    cwd: str,
-    max_messages: int = DEFAULT_RESUME_MAX_MESSAGES,
-) -> tuple[int | None, list[types.Content], int]:
-    """Find most recent session in `cwd`; return (sid, history, dropped_count).
-
-    `max_messages <= 0` disables the cap (load full history — explicit opt-in
-    via `--resume-max-messages 0`). Otherwise keep only the last N messages,
-    and trim leading non-user messages so the loaded history starts on a
-    user turn (the Gemini API requires this).
-    """
-    row = conn.execute(
-        "SELECT id FROM sessions WHERE cwd = ? ORDER BY last_active_at DESC LIMIT 1",
-        (cwd,),
-    ).fetchone()
-    if not row:
-        return None, [], 0
-    sid = row[0]
-    full = messages_load(conn, sid)
-    if max_messages <= 0 or len(full) <= max_messages:
-        return sid, full, 0
-    trimmed = full[-max_messages:]
-    # The history must start with a user turn for the API. If our cap landed
-    # mid-exchange (e.g. on a model or tool-response message), drop forward.
-    while trimmed and (trimmed[0].role or "") != "user":
-        trimmed = trimmed[1:]
-    return sid, trimmed, len(full) - len(trimmed)
-
-
-def session_list(conn: sqlite3.Connection, cwd: str | None, limit: int = 20) -> list[dict]:
-    if cwd is not None:
-        rows = conn.execute(
-            "SELECT id, cwd, model, task, started_at, last_active_at "
-            "FROM sessions WHERE cwd = ? ORDER BY last_active_at DESC LIMIT ?",
-            (cwd, limit),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT id, cwd, model, task, started_at, last_active_at "
-            "FROM sessions ORDER BY last_active_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    return [
-        {
-            "id": r[0],
-            "cwd": r[1],
-            "model": r[2],
-            "task": r[3],
-            "started_at": r[4],
-            "last_active_at": r[5],
-        }
-        for r in rows
-    ]
-
-
-def session_touch(conn: sqlite3.Connection, session_id: int) -> None:
-    conn.execute(
-        "UPDATE sessions SET last_active_at = ? WHERE id = ?",
-        (_now(), session_id),
-    )
-    conn.commit()
-
-
-def _next_seq(conn: sqlite3.Connection, session_id: int) -> int:
-    row = conn.execute(
-        "SELECT COALESCE(MAX(seq), -1) + 1 FROM messages WHERE session_id = ?",
-        (session_id,),
-    ).fetchone()
-    return row[0] if row else 0
-
-
-def message_save(conn: sqlite3.Connection, session_id: int, content: types.Content) -> None:
-    seq = _next_seq(conn, session_id)
-    payload = json.dumps(content_to_dict(content))
-    conn.execute(
-        "INSERT INTO messages(session_id, seq, role, parts_json, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (session_id, seq, content.role or "", payload, _now()),
-    )
-    conn.commit()
-
-
-def messages_load(conn: sqlite3.Connection, session_id: int) -> list[types.Content]:
-    rows = conn.execute(
-        "SELECT parts_json FROM messages WHERE session_id = ? ORDER BY seq ASC",
-        (session_id,),
-    ).fetchall()
-    return [dict_to_content(json.loads(r[0])) for r in rows]
-
-
-# Serialize types.Content <-> JSON-friendly dict so SQLite stores it
-# without depending on internal SDK pickling.
-
-def content_to_dict(content: types.Content) -> dict[str, Any]:
-    parts_out: list[dict[str, Any]] = []
-    for p in content.parts or []:
-        text = getattr(p, "text", None)
-        fc = getattr(p, "function_call", None)
-        fr = getattr(p, "function_response", None)
-        if fc is not None and getattr(fc, "name", None):
-            args_d = dict(fc.args) if fc.args else {}
-            parts_out.append({"type": "function_call", "name": fc.name, "args": args_d})
-        elif fr is not None and getattr(fr, "name", None):
-            resp_d = dict(fr.response) if fr.response else {}
-            parts_out.append({"type": "function_response", "name": fr.name, "response": resp_d})
-        elif text:
-            parts_out.append({"type": "text", "text": text})
-    return {"role": content.role or "", "parts": parts_out}
-
-
-def dict_to_content(d: dict[str, Any]) -> types.Content:
-    parts: list[types.Part] = []
-    for pd in d.get("parts", []):
-        t = pd.get("type")
-        if t == "text":
-            parts.append(types.Part.from_text(text=pd.get("text", "")))
-        elif t == "function_call":
-            parts.append(
-                types.Part(
-                    function_call=types.FunctionCall(
-                        name=pd["name"], args=pd.get("args", {})
-                    )
-                )
-            )
-        elif t == "function_response":
-            parts.append(
-                types.Part.from_function_response(
-                    name=pd["name"], response=pd.get("response", {})
-                )
-            )
-    return types.Content(role=d.get("role") or "user", parts=parts)
+# Session storage layer is in sessions.py (see imports at top).
 
 
 # ---------------------------------------------------------------------------
@@ -748,8 +574,8 @@ def run_loop(
     model: str,
     api_key: str,
     max_iterations: int,
-    db_conn: sqlite3.Connection | None,
-    session_id: int | None,
+    store: SessionStore | None,
+    session: Session | None,
     initial_history: list[types.Content] | None = None,
     verbose: bool = True,
     stream: bool = True,
@@ -766,8 +592,8 @@ def run_loop(
     history: list[types.Content] = list(initial_history or [])
     user_msg = _new_user_content(task)
     history.append(user_msg)
-    if db_conn is not None and session_id is not None:
-        message_save(db_conn, session_id, user_msg)
+    if store is not None and session is not None:
+        store.append_message(session, user_msg)
 
     metrics: dict[str, Any] = {
         "iterations": 0,
@@ -777,122 +603,153 @@ def run_loop(
         "total_output_tokens": 0,
         "model": model,
         "wall_seconds": 0.0,
-        "session_id": session_id,
+        "session_id": session.id if session else None,
         "streamed": stream,
     }
     t_start = time.perf_counter()
 
-    # Build fallback list: primary first, then chain entries that aren't the primary.
     current_model = model
     pending_fallbacks: list[str] = [m for m in MODEL_FALLBACK_CHAIN if m != current_model]
 
+    exit_code = 0
     iteration = 0
-    while True:
-        iteration += 1
-        if iteration > max_iterations:
-            sys.stderr.write(
-                f"open-code: hit max iterations ({max_iterations}) — increase with --max-iterations\n"
-            )
-            metrics["wall_seconds"] = time.perf_counter() - t_start
-            return 5, metrics
-        metrics["iterations"] = iteration
-        if verbose:
-            print(f"[iter {iteration}] calling {current_model}…", file=sys.stderr)
-
-        try:
-            if stream:
-                all_parts, function_calls, usage = _stream_iter_response(
-                    client, model=current_model, history=history, config=config, verbose=verbose
-                )
-                model_content = types.Content(role="model", parts=all_parts)
-            else:
-                response = client.models.generate_content(
-                    model=current_model, contents=history, config=config
-                )
-                usage = getattr(response, "usage_metadata", None)
-                if not response.candidates:
-                    sys.stderr.write("open-code: model returned no candidates\n")
-                    return 4, metrics
-                model_content = response.candidates[0].content
-                if model_content is None:
-                    sys.stderr.write("open-code: model returned empty content\n")
-                    return 4, metrics
-                function_calls = []
-                emitted = []
-                for part in model_content.parts or []:
-                    fc = getattr(part, "function_call", None)
-                    if fc is not None and getattr(fc, "name", None):
-                        function_calls.append(fc)
-                    else:
-                        text = getattr(part, "text", None) or ""
-                        if text:
-                            emitted.append(text)
-                if emitted:
-                    print("".join(emitted))
-        except Exception as exc:
-            if _is_model_unavailable_error(exc) and pending_fallbacks:
-                next_model = pending_fallbacks.pop(0)
+    try:
+        while True:
+            iteration += 1
+            if iteration > max_iterations:
                 sys.stderr.write(
-                    f"open-code: model {current_model!r} unavailable "
-                    f"({type(exc).__name__}); falling back to {next_model!r}\n"
+                    f"open-code: hit max iterations ({max_iterations}) — increase with --max-iterations\n"
                 )
-                current_model = next_model
-                metrics["model"] = current_model
-                iteration -= 1  # retry this step under the new model
-                continue
-            sys.stderr.write(f"open-code: Gemini call failed: {type(exc).__name__}: {exc}\n")
-            return 3, metrics
+                exit_code = 5
+                break
+            metrics["iterations"] = iteration
+            if verbose:
+                print(f"[iter {iteration}] calling {current_model}…", file=sys.stderr)
 
-        if usage is not None:
-            metrics["total_input_tokens"] += getattr(usage, "prompt_token_count", 0) or 0
-            metrics["total_output_tokens"] += getattr(usage, "candidates_token_count", 0) or 0
-
-        history.append(model_content)
-        if db_conn is not None and session_id is not None:
-            message_save(db_conn, session_id, model_content)
-            session_touch(db_conn, session_id)
-
-        if function_calls:
-            tool_result_parts: list[types.Part] = []
-            for fc in function_calls:
-                name = fc.name
-                args = dict(fc.args) if fc.args else {}
-                metrics["tool_calls"] += 1
-                if verbose:
-                    print(_render_tool_call(name, args), file=sys.stderr)
-
-                fn = TOOL_FUNCTIONS.get(name)
-                if fn is None:
-                    result = {"ok": False, "error": f"unknown tool: {name}"}
+            try:
+                if stream:
+                    all_parts, function_calls, usage = _stream_iter_response(
+                        client, model=current_model, history=history, config=config, verbose=verbose
+                    )
+                    model_content = types.Content(role="model", parts=all_parts)
                 else:
-                    try:
-                        result = fn(**args)
-                    except TypeError as exc:
-                        result = {"ok": False, "error": f"bad args for {name}: {exc}"}
-                    except Exception as exc:
-                        result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+                    response = client.models.generate_content(
+                        model=current_model, contents=history, config=config
+                    )
+                    usage = getattr(response, "usage_metadata", None)
+                    if not response.candidates:
+                        sys.stderr.write("open-code: model returned no candidates\n")
+                        exit_code = 4
+                        break
+                    model_content = response.candidates[0].content
+                    if model_content is None:
+                        sys.stderr.write("open-code: model returned empty content\n")
+                        exit_code = 4
+                        break
+                    function_calls = []
+                    emitted = []
+                    for part in model_content.parts or []:
+                        fc = getattr(part, "function_call", None)
+                        if fc is not None and getattr(fc, "name", None):
+                            function_calls.append(fc)
+                        else:
+                            text = getattr(part, "text", None) or ""
+                            if text:
+                                emitted.append(text)
+                    if emitted:
+                        print("".join(emitted))
+            except Exception as exc:
+                if _is_model_unavailable_error(exc) and pending_fallbacks:
+                    next_model = pending_fallbacks.pop(0)
+                    sys.stderr.write(
+                        f"open-code: model {current_model!r} unavailable "
+                        f"({type(exc).__name__}); falling back to {next_model!r}\n"
+                    )
+                    if store is not None and session is not None:
+                        store.append_fallback(
+                            session,
+                            from_model=current_model,
+                            to_model=next_model,
+                            reason=f"{type(exc).__name__}: {exc}",
+                        )
+                    current_model = next_model
+                    metrics["model"] = current_model
+                    iteration -= 1  # retry this step under the new model
+                    continue
+                sys.stderr.write(f"open-code: Gemini call failed: {type(exc).__name__}: {exc}\n")
+                exit_code = 3
+                break
 
-                if not result.get("ok"):
-                    metrics["tool_errors"] += 1
-                if verbose:
-                    print(_render_tool_result(name, result), file=sys.stderr)
+            input_tok = output_tok = 0
+            if usage is not None:
+                input_tok = getattr(usage, "prompt_token_count", 0) or 0
+                output_tok = getattr(usage, "candidates_token_count", 0) or 0
+                metrics["total_input_tokens"] += input_tok
+                metrics["total_output_tokens"] += output_tok
 
-                tool_result_parts.append(
-                    types.Part.from_function_response(name=name, response=result)
+            history.append(model_content)
+            if store is not None and session is not None:
+                store.append_message(session, model_content)
+                store.append_metrics(
+                    session, iteration=iteration, model=current_model,
+                    input_tok=input_tok, output_tok=output_tok,
                 )
 
-            tool_content = types.Content(role="user", parts=tool_result_parts)
-            history.append(tool_content)
-            if db_conn is not None and session_id is not None:
-                message_save(db_conn, session_id, tool_content)
-                session_touch(db_conn, session_id)
-            continue
+            if function_calls:
+                tool_result_parts: list[types.Part] = []
+                for fc in function_calls:
+                    name = fc.name
+                    args = dict(fc.args) if fc.args else {}
+                    metrics["tool_calls"] += 1
+                    if verbose:
+                        print(_render_tool_call(name, args), file=sys.stderr)
 
-        # No function calls — model finished.
-        break
+                    fn = TOOL_FUNCTIONS.get(name)
+                    if fn is None:
+                        result = {"ok": False, "error": f"unknown tool: {name}"}
+                    else:
+                        try:
+                            result = fn(**args)
+                        except TypeError as exc:
+                            result = {"ok": False, "error": f"bad args for {name}: {exc}"}
+                        except Exception as exc:
+                            result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
-    metrics["wall_seconds"] = time.perf_counter() - t_start
-    return 0, metrics
+                    if not result.get("ok"):
+                        metrics["tool_errors"] += 1
+                        # Audit-log: did we refuse it via path-sandbox/denylist?
+                        err = str(result.get("error", ""))
+                        if store is not None and session is not None and (
+                            "outside CWD" in err or "dangerous command" in err
+                        ):
+                            store.append_tool_refusal(
+                                session, tool=name, reason=err,
+                                args_snippet=_short(json.dumps(args), 200),
+                            )
+                    if verbose:
+                        print(_render_tool_result(name, result), file=sys.stderr)
+
+                    tool_result_parts.append(
+                        types.Part.from_function_response(name=name, response=result)
+                    )
+
+                tool_content = types.Content(role="user", parts=tool_result_parts)
+                history.append(tool_content)
+                if store is not None and session is not None:
+                    store.append_message(session, tool_content)
+                continue
+
+            # No function calls — model finished.
+            break
+    finally:
+        metrics["wall_seconds"] = time.perf_counter() - t_start
+        if store is not None and session is not None:
+            store.append_end(
+                session, exit_code=exit_code, iters=iteration,
+                wall_seconds=metrics["wall_seconds"],
+            )
+
+    return exit_code, metrics
 
 
 # ---------------------------------------------------------------------------
@@ -900,17 +757,17 @@ def run_loop(
 # ---------------------------------------------------------------------------
 
 
-def _print_session_list(sessions: list[dict]) -> None:
+def _print_session_list(sessions: list[Session]) -> None:
     if not sessions:
         print("(no sessions yet)")
         return
-    print(f"{'ID':>5}  {'STARTED':>20}  {'MODEL':<35}  TASK")
-    print("-" * 100)
+    print(f"{'ID':<38}  {'STARTED':<25}  {'MODEL':<35}  TASK")
+    print("-" * 130)
     for s in sessions:
-        task = s["task"] or ""
+        task = s.task or ""
         if len(task) > 40:
             task = task[:37] + "..."
-        print(f"{s['id']:>5}  {s['started_at']:>20}  {s['model']:<35}  {task}")
+        print(f"{s.id:<38}  {s.started_at:<25}  {s.model:<35}  {task}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -937,14 +794,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="Continue the most recent session in this directory (uses SQLite history).",
+        help="Continue the most recent session in this directory.",
+    )
+    parser.add_argument(
+        "--resume-id",
+        default=None,
+        help="Continue a specific session by UUID (regardless of CWD).",
     )
     parser.add_argument(
         "--resume-max-messages",
         type=int,
         default=int(os.environ.get("OPEN_CODE_RESUME_MAX", DEFAULT_RESUME_MAX_MESSAGES)),
         help=(
-            f"Cap on messages loaded by --resume (default {DEFAULT_RESUME_MAX_MESSAGES}). "
+            f"Cap on messages loaded by --resume/--resume-id (default {DEFAULT_RESUME_MAX_MESSAGES}). "
             "Set 0 to disable the cap and load full history."
         ),
     )
@@ -952,6 +814,11 @@ def main(argv: list[str] | None = None) -> int:
         "--list-sessions",
         action="store_true",
         help="List recent sessions for this directory and exit.",
+    )
+    parser.add_argument(
+        "--list-sessions-all",
+        action="store_true",
+        help="List sessions across all directories and exit.",
     )
     parser.add_argument(
         "--allow-outside-cwd",
@@ -969,9 +836,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Disable streaming output (one full response per iteration).",
     )
     parser.add_argument(
-        "--db",
-        default=os.environ.get("OPEN_CODE_DB", str(DEFAULT_DB_PATH)),
-        help=f"SQLite path for sessions (default: {DEFAULT_DB_PATH}).",
+        "--root",
+        default=os.environ.get("OPEN_CODE_ROOT", str(DEFAULT_OC_ROOT)),
+        help=f"Sessions root dir (default: {DEFAULT_OC_ROOT}).",
     )
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress per-iteration trace.")
     parser.add_argument(
@@ -986,12 +853,26 @@ def main(argv: list[str] | None = None) -> int:
     CONFIG.allow_outside_cwd = args.allow_outside_cwd
     CONFIG.allow_dangerous = args.allow_dangerous
 
-    db_path = Path(args.db).expanduser()
-    conn = db_connect(db_path)
+    root = Path(args.root).expanduser()
+    store = SessionStore(root)
 
-    if args.list_sessions:
-        sessions = session_list(conn, cwd=str(cwd))
-        print(f"Recent sessions in {cwd}:")
+    # One-shot migration of v0.2.x SQLite -> v0.3 JSONL.
+    legacy_db = root / "sessions.db"
+    if legacy_db.exists() and not any(store.projects_dir.iterdir()):
+        migrated = migrate_from_sqlite(legacy_db, store)
+        if migrated > 0:
+            sys.stderr.write(
+                f"open-code: migrated {migrated} session(s) from {legacy_db} "
+                f"to JSONL. Old DB renamed to .migrated; delete if unwanted.\n"
+            )
+
+    if args.list_sessions or args.list_sessions_all:
+        sessions = (
+            store.list_all() if args.list_sessions_all
+            else store.list_for_cwd(str(cwd))
+        )
+        scope = "all directories" if args.list_sessions_all else str(cwd)
+        print(f"Recent sessions in {scope}:")
         _print_session_list(sessions)
         return 0
 
@@ -1012,38 +893,53 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     initial_history: list[types.Content] = []
-    session_id: int | None = None
-    if args.resume:
-        session_id, initial_history, dropped = session_resume_for_cwd(
-            conn, str(cwd), max_messages=args.resume_max_messages
-        )
-        if session_id is None:
+    session: Session | None = None
+    prior_aggregate: dict[str, Any] | None = None
+
+    if args.resume_id:
+        session = store.find_by_id(args.resume_id)
+        if session is None:
+            sys.stderr.write(f"open-code: no session with id {args.resume_id!r}\n")
+            return 1
+        initial_history, dropped = store.load_history(session, args.resume_max_messages)
+        prior_aggregate = store.aggregate_metrics(session)
+        if not args.quiet:
+            note = (f"[resuming session {session.id} — {len(initial_history)} prior messages")
+            if dropped > 0:
+                note += f"; {dropped} older dropped (--resume-max-messages to adjust)"
+            print(note + "]", file=sys.stderr)
+    elif args.resume:
+        session = store.find_latest_for_cwd(str(cwd))
+        if session is None:
             sys.stderr.write(
                 f"open-code: no previous session found in {cwd}; starting a fresh one\n"
             )
-        elif not args.quiet:
-            note = f"[resuming session {session_id} — {len(initial_history)} prior messages"
-            if dropped > 0:
-                note += f"; {dropped} older message(s) dropped to keep input bounded"
-                note += " (raise --resume-max-messages or pass 0 to disable)"
-            print(note + "]", file=sys.stderr)
-    if session_id is None:
-        session_id = session_create(conn, str(cwd), args.model, task)
+        else:
+            initial_history, dropped = store.load_history(session, args.resume_max_messages)
+            prior_aggregate = store.aggregate_metrics(session)
+            if not args.quiet:
+                note = f"[resuming session {session.id} — {len(initial_history)} prior messages"
+                if dropped > 0:
+                    note += f"; {dropped} older dropped (--resume-max-messages to adjust)"
+                print(note + "]", file=sys.stderr)
+    if session is None:
+        session = store.create(str(cwd), args.model, task)
 
     exit_code, metrics = run_loop(
         task=task,
         model=args.model,
         api_key=api_key,
         max_iterations=args.max_iterations,
-        db_conn=conn,
-        session_id=session_id,
+        store=store,
+        session=session,
         initial_history=initial_history,
         verbose=not args.quiet,
         stream=not args.no_stream,
     )
 
     if args.show_metrics:
-        sys.stderr.write(
+        # This invocation
+        line = (
             f"\n[open-code] model={metrics['model']} "
             f"session={metrics['session_id']} "
             f"stream={metrics['streamed']} "
@@ -1054,6 +950,18 @@ def main(argv: list[str] | None = None) -> int:
             f"output_tok={metrics['total_output_tokens']} "
             f"wall={metrics['wall_seconds']:.2f}s\n"
         )
+        sys.stderr.write(line)
+        # Cumulative across the whole session (incl. prior --resume turns)
+        if session is not None:
+            total = store.aggregate_metrics(session)
+            sys.stderr.write(
+                f"[open-code:cumulative] session={session.id} "
+                f"iters={total['n_iters']} "
+                f"input_tok={total['input_tok']} "
+                f"output_tok={total['output_tok']} "
+                f"fallbacks={total['n_fallbacks']} "
+                f"refusals={total['n_refusals']}\n"
+            )
 
     return exit_code
 

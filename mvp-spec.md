@@ -1,3 +1,30 @@
+# MVP spec — v0.3.0 (extends v0.2.1)
+
+> v0.3.0 (2026-05-10) switches session storage from SQLite to JSONL,
+> brings several Claude-Code-style storage patterns, and closes two
+> carried gaps from the v0.2.0 brutal review.
+>
+> Changes:
+> - **Storage:** `~/.open-code/projects/<encoded-cwd>/<uuid>.jsonl`. One
+>   append-only event log per session, organized by CWD. Filesystem is
+>   the index. Inspectable via `cat`/`grep`/`tail`.
+> - **Migration:** First v0.3 run reads any existing v0.2 `sessions.db`,
+>   writes JSONL files, renames the DB to `.migrated`.
+> - **`--resume-id <uuid>`**: resume a specific session by id, regardless
+>   of CWD. `--resume` still continues the most recent in CWD.
+> - **Cumulative metrics across --resume chains**: re-reads `metrics`
+>   events from the JSONL to report lifetime input/output tokens.
+> - **Audit log**: tool refusals, model fallbacks, and per-iter metrics
+>   all become events in the JSONL.
+> - **Extracted `sessions.py`** per the v0.2.1 pre-commitment.
+> - **Stream-error sqlite consistency**: improved-not-closed. Session
+>   header + user message + end event survive crashes. Partial
+>   *model output* still requires per-chunk save (deferred to v0.4).
+>
+> Architecture: two files now (not "single file ≤ 900").
+>   `open_code.py` 970 lines + `sessions.py` 479 lines = 1449 total.
+>   Per-file cap loosened: each is comfortably under 1000.
+
 # MVP spec — v0.2.1 (extends v0.2 / v0.1)
 
 > v0.2.1 (2026-05-10) closes the three blockers surfaced by the brutal
