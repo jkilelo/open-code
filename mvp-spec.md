@@ -1,4 +1,43 @@
-# MVP spec — v0.1
+# MVP spec — v0.2 (extends v0.1)
+
+> v0.1 shipped 🟢 on 2026-05-10. See `runs/2026-05-10-v0.1.0.md`.
+> v0.2 keeps the same primary persona (Jeff) and adds four targeted
+> enhancements without expanding scope to a new persona:
+>
+> 1. Switch default model to `gemini-3.1-flash-lite-preview`.
+> 2. Stream model output to stdout as it arrives (no big pause at end of turn).
+> 3. SQLite-backed persistent chats: `--resume` continues most recent
+>    session in CWD; `--list-sessions` shows recent.
+> 4. Concrete security defaults: refuse writes outside CWD, refuse
+>    obviously-destructive shell commands, both bypassable via
+>    explicit `--allow-outside-cwd` / `--allow-dangerous` flags.
+>
+> All v0.1 assertions still hold; v0.2 adds five more (A7–A11).
+> Single-file constraint stays; line cap raised to 900 (sqlite +
+> streaming + serialization + denylist patterns came in at +385 LOC
+> for net 880; documented as a deliberate trade-off in runs/).
+>
+> ## v0.2 new assertions
+>
+> 7. **--resume reuses prior history.** Run task A in CWD `/tmp/x`;
+>    later run `open_code --resume "what was my last task?"` in the
+>    same CWD; assert the model answers based on prior context.
+> 8. **Streaming output.** During a long response, observe model text
+>    appearing in stdout progressively (multiple flushes, not all at
+>    end). Verify by timing: first stdout token < 1.5s after iter
+>    start; full text arrives over multiple distinct write events.
+> 9. **Default model is `gemini-3.1-flash-lite-preview`.** `--show-metrics`
+>    line reports this model unless `--model`/`OPEN_CODE_MODEL` overrides.
+> 10. **Path sandbox.** `open_code "write /tmp/escape.txt with hi"`
+>     from CWD `/tmp/x` rejects the tool call; the model receives a
+>     `path outside CWD` error; behavior changes with `--allow-outside-cwd`.
+> 11. **Shell denylist.** `open_code "run rm -rf /"` rejects the tool
+>     call; the model receives a `dangerous command refused` error;
+>     `--allow-dangerous` allows it.
+>
+> ---
+
+# MVP spec — v0.1 (carried)
 
 ## Persona shipped
 
