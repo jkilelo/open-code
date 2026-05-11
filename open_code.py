@@ -1066,6 +1066,29 @@ def run_loop(
             break
     finally:
         metrics["wall_seconds"] = time.perf_counter() - t_start
+        # Turn-end snapshot (Tier 2 #12 — atomic-commit per turn).
+        # Runs even on KeyboardInterrupt / exceptions so the user can
+        # /undo whatever changes the partially-completed turn made.
+        if (getattr(settings, "auto_checkpoint", False)
+                and session is not None and store is not None):
+            try:
+                import checkpoints as _ckpt
+                end_label = f"turn-end (iter={iteration}, exit={exit_code})"
+                end_sha, end_msg = _ckpt.snapshot(CONFIG.cwd, end_label)
+                if end_sha:
+                    store.append_checkpoint(
+                        session, sha=end_sha, label=end_label,
+                        phase="turn-end",
+                    )
+                    if verbose:
+                        sys.stderr.write(
+                            f"[checkpoint {end_sha[:10]} — {end_label}]\n"
+                        )
+                elif verbose:
+                    sys.stderr.write(f"[turn-end checkpoint skipped: {end_msg}]\n")
+            except Exception as exc:
+                if verbose:
+                    sys.stderr.write(f"[turn-end checkpoint error: {exc}]\n")
         if store is not None and session is not None:
             store.append_end(
                 session, exit_code=exit_code, iters=iteration,

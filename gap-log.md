@@ -249,6 +249,16 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.16.0 ships 🟢.** Tier 2: 7 of 15 features done. Next: #12 atomic-commit per turn (reuses snapshot infra for turn-end + rollback-on-error).
 
+---
+
+## v0.17.0 — 2026-05-11 (Tier 2 #12)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#12** | **Atomic-commit per turn** (turn-end snapshot in `run_loop`'s `finally:` block; survives KeyboardInterrupt; `SessionStore.recent_checkpoints(phase)` lookup; REPL `/undo [N]` restores to start of Nth-most-recent turn with diff preview + literal-"undo" confirm + auto pre-undo safety snapshot) | ✅ | `tests/probe_atomic_turn.py` 4/4: phase-filtered recent_checkpoints (newest first), stubbed run_loop emits both turn-start + turn-end with distinct shas, turn-end fires after simulated Ctrl-C (KeyboardInterrupt re-raised), auto_checkpoint=False emits zero events and skips shadow-repo init |
+
+**v0.17.0 ships 🟢.** Tier 2: 8 of 15 features done. Next: #17 sticky session permissions.
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

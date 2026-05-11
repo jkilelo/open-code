@@ -48,6 +48,7 @@ Slash commands:
   /checkpoints       list recent shadow-git checkpoints (Tier 2 #11)
   /checkpoint [label] take a manual snapshot now (use after a risky edit)
   /restore <ref>     restore working tree to a prior checkpoint (DESTRUCTIVE; confirms)
+  /undo [N]          restore to the start of the Nth-most-recent turn (default N=1)
   /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
   /plan <task>       run <task> in plan mode (read-only); save result as a plan event
   /act [task]        load most recent plan; switch to acceptEdits; execute
@@ -435,6 +436,65 @@ def run_repl(
                     print(f"[restored to {sha[:10]}; safety snapshot above to roll forward]")
                 else:
                     print(f"[restore failed: {msg}]")
+                continue
+            if cmd == "undo":
+                # Tier 2 #12: restore to the start of the Nth-most-recent turn.
+                # N=1 -> most recent turn-start (default; "undo my last prompt").
+                import checkpoints as _ckpt
+                n = 1
+                if rest:
+                    try:
+                        n = max(1, int(rest))
+                    except ValueError:
+                        print("usage: /undo [N]  (N defaults to 1)")
+                        continue
+                ts_events = store.recent_checkpoints(
+                    session, phase="turn-start", limit=n + 5,
+                )
+                if len(ts_events) < n:
+                    print(
+                        f"[only {len(ts_events)} turn-start checkpoint(s) "
+                        f"in this session; can't undo {n} turns]"
+                    )
+                    continue
+                target = ts_events[n - 1]
+                sha = target["sha"]
+                label = target.get("label", "(no label)")
+                preview = _ckpt.diff_summary(cwd, sha, "HEAD")
+                print(
+                    f"About to restore to start of turn {n} back: "
+                    f"{sha[:10]} — {label}"
+                )
+                print("Changes that will be UNDONE:")
+                print(preview if preview.strip() else "  (no diff output)")
+                try:
+                    ans = input(
+                        "[undo/cancel] (type 'undo' to confirm): "
+                    ).strip().lower()
+                except EOFError:
+                    ans = "cancel"
+                if ans != "undo":
+                    print("[cancelled]")
+                    continue
+                safety_sha, _ = _ckpt.snapshot(
+                    cwd, f"pre-undo-from {sha[:10]}",
+                )
+                if safety_sha:
+                    store.append_checkpoint(
+                        session, sha=safety_sha,
+                        label=f"pre-undo-from {sha[:10]}",
+                        phase="manual",
+                    )
+                    print(f"[safety snapshot {safety_sha[:10]} taken]")
+                ok, msg = _ckpt.restore(cwd, sha)
+                if ok:
+                    print(
+                        f"[undone — restored to {sha[:10]}; "
+                        f"use /restore {safety_sha[:10] if safety_sha else '<sha>'} "
+                        f"to roll forward]"
+                    )
+                else:
+                    print(f"[undo failed: {msg}]")
                 continue
             if cmd == "effort":
                 from settings import VALID_EFFORTS, Settings as _S

@@ -306,6 +306,33 @@ class SessionStore:
             },
         )
 
+    def recent_checkpoints(self, session: Session,
+                           phase: str | None = None,
+                           limit: int = 20) -> list[dict[str, Any]]:
+        """Return recent `checkpoint` events from this session (newest first).
+
+        Optional `phase` filter ∈ {"turn-start", "turn-end", "manual"}.
+        Used by `/undo` to find the most-recent turn-start sha to
+        restore the workspace to.
+        """
+        out: list[dict[str, Any]] = []
+        try:
+            with session.path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        ev = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if ev.get("kind") != "checkpoint":
+                        continue
+                    if phase is not None and ev.get("phase") != phase:
+                        continue
+                    out.append(ev)
+        except OSError:
+            return []
+        out.reverse()  # newest first
+        return out[:limit]
+
     def append_plan(self, session: Session, *, plan_id: str,
                     content: str, model: str) -> None:
         """Record a Plan/Act 'plan' artifact in the session JSONL.
