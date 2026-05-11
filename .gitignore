@@ -1,0 +1,27 @@
+# venvs
+.venv/
+venv/
+env/
+
+# secrets — never commit
+.env
+.env.local
+*.key
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local-only verification scratch
+verify-wsl.sh
