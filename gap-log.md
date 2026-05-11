@@ -289,6 +289,16 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.20.0 ships 🟢.** Tier 2: 11 of 15 features done. Next: #23 output styles, #21 skill caching, #22 plugins, #24 /loop+/schedule.
 
+---
+
+## v0.21.0 — 2026-05-11 (Tier 2 #23)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#23** | **Output styles** (system_instruction overlays; 6 built-ins: default/concise/explanatory/learning/pair-programmer/yolo; custom styles at `.open-code/output-styles/<name>.md` or `~/.open-code/output-styles/<name>.md`; project overrides user overrides built-in; `--style` + `--list-styles` CLI flags; `/style` REPL command; `settings.output_style` field; overlay appears in system_instruction under `## Output style: <name>` header) | ✅ | `tests/probe_output_styles.py` 7/7: built-ins non-empty except default, header injection, project overrides built-in name, unknown style is no-op, list_available labels by source, settings.output_style honored from JSON, defaults to "default" |
+
+**v0.21.0 ships 🟢.** Tier 2: 12 of 15 features done. Three left: #21 (skill cache), #22 (plugin system), #24 (/loop+/schedule).
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

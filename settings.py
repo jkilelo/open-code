@@ -102,6 +102,9 @@ class Settings:
     # the working tree into `.open-code/checkpoints.git/` at the start
     # of each turn. Off by default — requires `git` binary on PATH.
     auto_checkpoint: bool = False
+    # Tier 2 #23 — named output style overlay for the system_instruction.
+    # See output_styles.py for built-ins. "default" = no overlay.
+    output_style: str = "default"
     raw: dict[str, Any] = field(default_factory=dict)
     # Per-file paths that contributed (for diagnostics)
     sources: list[Path] = field(default_factory=list)
@@ -207,6 +210,10 @@ def load_layered_settings(cwd: Path) -> Settings:
     cps = merged.get("checkpoints") or {}
     auto_checkpoint = bool(cps.get("auto", False)) if isinstance(cps, dict) else False
 
+    output_style_raw = merged.get("output_style")
+    output_style = (output_style_raw if isinstance(output_style_raw, str)
+                    else "default")
+
     return Settings(
         model=merged.get("model") if isinstance(merged.get("model"), str) else None,
         max_iterations=(merged.get("max_iterations")
@@ -219,6 +226,7 @@ def load_layered_settings(cwd: Path) -> Settings:
         editor_model=editor_model,
         effort=effort,
         auto_checkpoint=auto_checkpoint,
+        output_style=output_style,
         raw=merged,
         sources=sources,
     )

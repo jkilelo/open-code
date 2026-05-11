@@ -45,6 +45,7 @@ Slash commands:
   /agents            list subagents under .open-code/agents/ (use via the delegate tool)
   /compact [keep]    summarize older history; keep last N msgs verbatim (default 10)
   /effort [name]     show or set reasoning effort (low/medium/high/xhigh)
+  /style [name]      show or set output style overlay (default/concise/explanatory/learning/pair-programmer/yolo or custom)
   /checkpoints       list recent shadow-git checkpoints (Tier 2 #11)
   /checkpoint [label] take a manual snapshot now (use after a risky edit)
   /restore <ref>     restore working tree to a prior checkpoint (DESTRUCTIVE; confirms)
@@ -495,6 +496,31 @@ def run_repl(
                     )
                 else:
                     print(f"[undo failed: {msg}]")
+                continue
+            if cmd == "style":
+                # Tier 2 #23 — output style overlay. The current
+                # system_instruction was finalized at cli.main time, so
+                # mid-REPL changes apply to NEW sessions (via /clear)
+                # rather than the current one.
+                import output_styles as _styles
+                from settings import Settings as _S
+                if settings is None:
+                    settings = _S()
+                if not rest:
+                    available = _styles.list_available(cwd)
+                    print(f"current style: {settings.output_style}")
+                    print("available:")
+                    for name, source in available:
+                        print(f"  {name:<20}  ({source})")
+                    continue
+                # Validate by resolving (returns "" overlay if unknown,
+                # but we still allow it — user might be staging a name).
+                _, source = _styles.resolve_overlay(rest, cwd)
+                settings.output_style = rest
+                print(
+                    f"[output style set to {rest!r} ({source}); "
+                    "applies to NEW sessions — use /clear to apply now]"
+                )
                 continue
             if cmd == "effort":
                 from settings import VALID_EFFORTS, Settings as _S

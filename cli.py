@@ -143,6 +143,19 @@ def build_parser() -> argparse.ArgumentParser:
              "(model / iter / tokens / refusals).",
     )
     parser.add_argument(
+        "--style",
+        default=None,
+        help="Output style overlay applied to the system instruction "
+             "(Tier 2 #23). Built-ins: default, concise, explanatory, "
+             "learning, pair-programmer, yolo. Custom: drop "
+             "<name>.md in .open-code/output-styles/ or ~/.open-code/output-styles/.",
+    )
+    parser.add_argument(
+        "--list-styles",
+        action="store_true",
+        help="List available output styles (built-in + user + project) and exit.",
+    )
+    parser.add_argument(
         "--auto-checkpoint",
         action="store_true",
         help="Take a shadow-git snapshot of the working tree at the "
@@ -235,6 +248,14 @@ def main(argv: list[str] | None = None) -> int:
         settings.effort = args.effort
     if args.auto_checkpoint:
         settings.auto_checkpoint = True
+    if args.style is not None:
+        settings.output_style = args.style
+
+    if args.list_styles:
+        from output_styles import list_available
+        for name, source in list_available(cwd):
+            print(f"  {name:<20}  ({source})")
+        return 0
     if args.print_json:
         # Implies --quiet and disables streaming so we emit one
         # well-formed JSON object per logical event instead of mixing
@@ -325,6 +346,18 @@ def main(argv: list[str] | None = None) -> int:
             f"{', '.join(str(p) for p, _ in layers)}]",
             file=sys.stderr,
         )
+
+    # Tier 2 #23 — apply output-style overlay (if any) to the
+    # system_instruction. settings.output_style defaults to "default"
+    # which is a no-op.
+    if settings.output_style and settings.output_style != "default":
+        from output_styles import apply_to_system_instruction
+        system_instruction, style_source = apply_to_system_instruction(
+            system_instruction, settings.output_style, cwd,
+        )
+        if not args.quiet:
+            print(f"[output style: {settings.output_style} ({style_source})]",
+                  file=sys.stderr)
 
     # Repo-map: append a symbol skeleton (Aider-style, Python only in v0.13)
     if not args.no_repomap:
