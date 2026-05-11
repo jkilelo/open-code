@@ -1,3 +1,15 @@
+# MVP spec — v0.2.1 (extends v0.2 / v0.1)
+
+> v0.2.1 (2026-05-10) closes the three blockers surfaced by the brutal
+> review of v0.2.0: denylist gaps, unbounded `--resume`, no model
+> fallback. No new assertions; existing A7/A9/A11 strengthened with
+> additional regression coverage (`tests/probe_denylist.py`,
+> `tests/probe_resume_bloat.py`, `tests/probe_fallback.py`).
+> Line cap raised again 900 → **1100** to accommodate the expanded
+> denylist + helper functions + resume cap + fallback chain
+> (~180 LOC on top of v0.2.0). 1062 actual. Single-file constraint
+> still holds; if v0.3 grows it further, `sessions.py` extracts.
+
 # MVP spec — v0.2 (extends v0.1)
 
 > v0.1 shipped 🟢 on 2026-05-10. See `runs/2026-05-10-v0.1.0.md`.

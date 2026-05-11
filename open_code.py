@@ -70,25 +70,137 @@ MAX_SHELL_OUTPUT = 8000
 
 DEFAULT_DB_PATH = Path.home() / ".open-code" / "sessions.db"
 
-# Patterns that look catastrophically destructive. Conservative — the goal
-# is to catch obvious foot-guns, not lock down everything. `--allow-dangerous`
-# bypasses entirely.
-DANGEROUS_PATTERNS = [
-    re.compile(r"\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f?|-[a-zA-Z]*f[a-zA-Z]*r)\s+[/~]", re.I),
-    re.compile(r"\brm\s+-rf\s+\*", re.I),
-    re.compile(r"\bmkfs(\.|\s)", re.I),
-    re.compile(r"\bdd\s+[^|]*\bof=/dev/", re.I),
-    re.compile(r":\s*\(\s*\)\s*\{\s*:\|:&\s*\};:"),  # fork bomb
-    re.compile(r"\bchmod\s+-R\s+777\s+/"),
-    re.compile(r">\s*/dev/sd[a-z]"),
-    re.compile(r"\bshutdown\b", re.I),
-    re.compile(r"\breboot\b", re.I),
-    re.compile(r"\bhalt\b", re.I),
-    re.compile(r"\bformat\s+[a-zA-Z]:", re.I),
-    re.compile(r"\bdel\s+/[a-zA-Z]+\s+[a-zA-Z]:\\", re.I),
-    re.compile(r"\bRemove-Item\s+-Recurse\s+-Force\s+(C:|/|~)", re.I),
-    re.compile(r"\bsudo\s+rm\s+-rf", re.I),
+# Default cap on history loaded by --resume. Prevents unbounded token bloat
+# after many turns in one CWD.
+DEFAULT_RESUME_MAX_MESSAGES = 80
+
+# Model fallback chain. Tried in order when the primary model returns an
+# availability error (404 / "not found" / "unavailable" / "deprecated").
+# All entries should be reasonable substitutes for `gemini-3.1-flash-lite-preview`.
+MODEL_FALLBACK_CHAIN = [
+    "gemini-3.1-flash-lite",        # GA equivalent of the preview default
+    "gemini-3-flash-preview",       # adjacent 3.x preview
+    "gemini-flash-lite-latest",     # Google's evergreen alias
+    "gemini-2.5-flash-lite",        # last-gen GA equivalent
+    "gemini-2.5-flash",             # last-resort fallback
 ]
+
+# Patterns that look catastrophically destructive. Each is a regex.
+# `_dangerous_match` ALSO runs the two token-aware helpers below to catch
+# `rm`-with-both-r-and-f-flags variants that simple regex can't handle
+# without false positives. `--allow-dangerous` bypasses both.
+DANGEROUS_PATTERNS = [
+    # Filesystem-level destruction
+    re.compile(r"\bmkfs(?:\.|\s)", re.I),
+    re.compile(r"\bdd\s+[^|]*\bof=/dev/", re.I),
+    re.compile(r">\s*/dev/sd[a-z]"),
+    # Redirect into critical config files
+    re.compile(r">>?\s*/etc/(?:passwd|shadow|sudoers|hosts|fstab)\b", re.I),
+    # Fork bomb
+    re.compile(r":\s*\(\s*\)\s*\{\s*:\|:&\s*\};:"),
+    # chmod -R 777 of system roots
+    re.compile(r"\bchmod\s+-[a-zA-Z]*R[a-zA-Z]*\s+(?:777|666|000)\s+[/~]", re.I),
+    # Windows native recursive deletes
+    re.compile(r"\brd\s+/s\b", re.I),
+    re.compile(r"\brmdir\s+/s\b", re.I),
+    re.compile(r"\bdel\s+/[a-zA-Z]+\s+[a-zA-Z]:\\", re.I),
+    re.compile(r"\bformat\s+[a-zA-Z]:", re.I),
+    # System power control
+    re.compile(r"\bshutdown\b", re.I),
+    re.compile(r"\b(?:reboot|halt|poweroff)(?:\s|$)", re.I),
+    re.compile(r"\binit\s+0\b"),
+    # Network → execution (curl|sh, wget|sh, eval $(curl ...))
+    re.compile(r"\b(?:curl|wget)\b[^|;]*\|\s*(?:sh|bash|zsh|ksh|fish)\b", re.I),
+    re.compile(r"\beval\s+[\"']?\$\([^)]*\b(?:curl|wget)\b", re.I),
+    # find / -delete (broad deletion via find on root or home)
+    re.compile(r"\bfind\s+[/~][^;|]*\s-delete\b", re.I),
+    # Git destruction (force-push, hard reset, clean -fd)
+    re.compile(r"\bgit\s+push\b[^;|]*\s(?:--force\b|--force-with-lease\b|-f\b)", re.I),
+    re.compile(r"\bgit\s+reset\s+--hard\b", re.I),
+    re.compile(r"\bgit\s+clean\s+-[a-zA-Z]*f[a-zA-Z]*d[a-zA-Z]*", re.I),
+    # Container/cluster destruction
+    # `docker system prune` with -f/-a/-af/--force/--all (silently nukes)
+    re.compile(r"\bdocker\s+system\s+prune\b[^;|]*\s-[a-zA-Z]*[af]", re.I),
+    re.compile(r"\bdocker\s+system\s+prune\b[^;|]*\s--(?:all|force)\b", re.I),
+    re.compile(r"\bkubectl\s+delete\s+(?:namespace|ns|--all\b)", re.I),
+    # Package publish (irreversible release)
+    re.compile(r"\bnpm\s+publish\b", re.I),
+    # Firewall disable
+    re.compile(r"\bnetsh\s+advfirewall\s+set\s+[^;|]*\sstate\s+off\b", re.I),
+]
+
+
+def _rm_has_recurse_and_force(command: str) -> bool:
+    """Token-aware check: does this command invoke `rm` with BOTH -r and -f flags?
+
+    Handles combined (-rf, -fr, -Rf, -rfv), separated (-r -f, -f -r), long
+    (--recursive --force), full-path invocation (/usr/bin/rm), uppercase RM,
+    sudo prefix, sh -c '...' wrappers, and pipelines (ls | xargs rm -rf).
+    """
+    # Walk every `rm` token in the command and check its flag tail.
+    for m in re.finditer(r"(?:^|[^a-zA-Z0-9_/-])(?:[/\w]+/)?rm\b(.*)", command, re.I):
+        rest = m.group(1)
+        # Stop scanning flags at the first pipeline / list separator
+        rest = re.split(r"[;|&]|>", rest, maxsplit=1)[0]
+        has_r = False
+        has_f = False
+        for tok in rest.split():
+            if not tok.startswith("-"):
+                # First non-flag token is the target — flags end here.
+                # But target can also be `-rf/` style (no space). Handled
+                # by checking the original token below.
+                break
+            low = tok.lower()
+            if low.startswith("--recursive"):
+                has_r = True
+            elif low.startswith("--force"):
+                has_f = True
+            elif tok.startswith("--"):
+                continue
+            else:
+                letters = tok[1:].lower()
+                if "r" in letters:
+                    has_r = True
+                if "f" in letters:
+                    has_f = True
+        # Also handle `rm -rf/` (no space between flags and target)
+        if not (has_r and has_f):
+            attached = re.search(r"\brm\s+-([a-zA-Z]+)(?:[/~])", command, re.I)
+            if attached:
+                letters = attached.group(1).lower()
+                if "r" in letters and "f" in letters:
+                    has_r = has_f = True
+        if has_r and has_f:
+            return True
+    return False
+
+
+def _ps_remove_has_recurse_and_force(command: str) -> bool:
+    """PowerShell-style: Remove-Item / ri / rmdir with -Recurse AND -Force.
+
+    Handles combined (-rf), long (-Recurse -Force), and short (-r -f).
+    """
+    if not re.search(r"\b(?:Remove-Item|rmdir)\b", command, re.I) \
+            and not re.search(r"(?:^|[^a-zA-Z0-9_])ri\b", command):
+        return False
+    has_r = False
+    has_f = False
+    for tok in re.findall(r"-[A-Za-z]+", command):
+        low = tok.lower()
+        # Long flags first
+        if low == "-recurse" or low == "-r":
+            has_r = True
+            continue
+        if low == "-force" or low == "-f":
+            has_f = True
+            continue
+        # Combined short flags like -rf, -Rf
+        letters = low[1:]
+        if "r" in letters:
+            has_r = True
+        if "f" in letters:
+            has_f = True
+    return has_r and has_f
 
 SYSTEM_INSTRUCTION = """\
 You are open-code, a terminal coding agent.
@@ -214,10 +326,37 @@ def tool_list_dir(path: str = ".") -> dict[str, Any]:
 
 
 def _dangerous_match(command: str) -> str | None:
+    """Return the matched-pattern description if `command` is destructive."""
+    if _rm_has_recurse_and_force(command):
+        return "rm with both recursive and force flags"
+    if _ps_remove_has_recurse_and_force(command):
+        return "Remove-Item / rmdir / ri with -Recurse and -Force"
     for pat in DANGEROUS_PATTERNS:
         if pat.search(command):
             return pat.pattern
     return None
+
+
+def _is_model_unavailable_error(exc: Exception) -> bool:
+    """True if exc looks like 'this model is not available / not found'.
+
+    Used to decide whether to fall through to the next model in
+    MODEL_FALLBACK_CHAIN. Conservative — only triggers on availability
+    signals, not auth errors or quota errors.
+    """
+    msg = str(exc).lower()
+    keywords = [
+        "not found",
+        "404",
+        "model not",
+        "is not supported",
+        "unsupported model",
+        "unavailable",
+        "deprecated",
+        "no longer available",
+        "invalid model",
+    ]
+    return any(k in msg for k in keywords)
 
 
 def tool_run_shell(command: str, timeout: int = DEFAULT_TIMEOUT_PER_SHELL) -> dict[str, Any]:
@@ -380,17 +519,33 @@ def session_create(conn: sqlite3.Connection, cwd: str, model: str, task: str) ->
 
 
 def session_resume_for_cwd(
-    conn: sqlite3.Connection, cwd: str
-) -> tuple[int | None, list[types.Content]]:
+    conn: sqlite3.Connection,
+    cwd: str,
+    max_messages: int = DEFAULT_RESUME_MAX_MESSAGES,
+) -> tuple[int | None, list[types.Content], int]:
+    """Find most recent session in `cwd`; return (sid, history, dropped_count).
+
+    `max_messages <= 0` disables the cap (load full history — explicit opt-in
+    via `--resume-max-messages 0`). Otherwise keep only the last N messages,
+    and trim leading non-user messages so the loaded history starts on a
+    user turn (the Gemini API requires this).
+    """
     row = conn.execute(
         "SELECT id FROM sessions WHERE cwd = ? ORDER BY last_active_at DESC LIMIT 1",
         (cwd,),
     ).fetchone()
     if not row:
-        return None, []
+        return None, [], 0
     sid = row[0]
-    history = messages_load(conn, sid)
-    return sid, history
+    full = messages_load(conn, sid)
+    if max_messages <= 0 or len(full) <= max_messages:
+        return sid, full, 0
+    trimmed = full[-max_messages:]
+    # The history must start with a user turn for the API. If our cap landed
+    # mid-exchange (e.g. on a model or tool-response message), drop forward.
+    while trimmed and (trimmed[0].role or "") != "user":
+        trimmed = trimmed[1:]
+    return sid, trimmed, len(full) - len(trimmed)
 
 
 def session_list(conn: sqlite3.Connection, cwd: str | None, limit: int = 20) -> list[dict]:
@@ -627,20 +782,32 @@ def run_loop(
     }
     t_start = time.perf_counter()
 
-    for iteration in range(1, max_iterations + 1):
+    # Build fallback list: primary first, then chain entries that aren't the primary.
+    current_model = model
+    pending_fallbacks: list[str] = [m for m in MODEL_FALLBACK_CHAIN if m != current_model]
+
+    iteration = 0
+    while True:
+        iteration += 1
+        if iteration > max_iterations:
+            sys.stderr.write(
+                f"open-code: hit max iterations ({max_iterations}) — increase with --max-iterations\n"
+            )
+            metrics["wall_seconds"] = time.perf_counter() - t_start
+            return 5, metrics
         metrics["iterations"] = iteration
         if verbose:
-            print(f"[iter {iteration}] calling {model}…", file=sys.stderr)
+            print(f"[iter {iteration}] calling {current_model}…", file=sys.stderr)
 
         try:
             if stream:
                 all_parts, function_calls, usage = _stream_iter_response(
-                    client, model=model, history=history, config=config, verbose=verbose
+                    client, model=current_model, history=history, config=config, verbose=verbose
                 )
                 model_content = types.Content(role="model", parts=all_parts)
             else:
                 response = client.models.generate_content(
-                    model=model, contents=history, config=config
+                    model=current_model, contents=history, config=config
                 )
                 usage = getattr(response, "usage_metadata", None)
                 if not response.candidates:
@@ -663,6 +830,16 @@ def run_loop(
                 if emitted:
                     print("".join(emitted))
         except Exception as exc:
+            if _is_model_unavailable_error(exc) and pending_fallbacks:
+                next_model = pending_fallbacks.pop(0)
+                sys.stderr.write(
+                    f"open-code: model {current_model!r} unavailable "
+                    f"({type(exc).__name__}); falling back to {next_model!r}\n"
+                )
+                current_model = next_model
+                metrics["model"] = current_model
+                iteration -= 1  # retry this step under the new model
+                continue
             sys.stderr.write(f"open-code: Gemini call failed: {type(exc).__name__}: {exc}\n")
             return 3, metrics
 
@@ -713,12 +890,6 @@ def run_loop(
 
         # No function calls — model finished.
         break
-    else:
-        sys.stderr.write(
-            f"open-code: hit max iterations ({max_iterations}) — increase with --max-iterations\n"
-        )
-        metrics["wall_seconds"] = time.perf_counter() - t_start
-        return 5, metrics
 
     metrics["wall_seconds"] = time.perf_counter() - t_start
     return 0, metrics
@@ -767,6 +938,15 @@ def main(argv: list[str] | None = None) -> int:
         "--resume",
         action="store_true",
         help="Continue the most recent session in this directory (uses SQLite history).",
+    )
+    parser.add_argument(
+        "--resume-max-messages",
+        type=int,
+        default=int(os.environ.get("OPEN_CODE_RESUME_MAX", DEFAULT_RESUME_MAX_MESSAGES)),
+        help=(
+            f"Cap on messages loaded by --resume (default {DEFAULT_RESUME_MAX_MESSAGES}). "
+            "Set 0 to disable the cap and load full history."
+        ),
     )
     parser.add_argument(
         "--list-sessions",
@@ -834,17 +1014,19 @@ def main(argv: list[str] | None = None) -> int:
     initial_history: list[types.Content] = []
     session_id: int | None = None
     if args.resume:
-        session_id, initial_history = session_resume_for_cwd(conn, str(cwd))
+        session_id, initial_history, dropped = session_resume_for_cwd(
+            conn, str(cwd), max_messages=args.resume_max_messages
+        )
         if session_id is None:
             sys.stderr.write(
                 f"open-code: no previous session found in {cwd}; starting a fresh one\n"
             )
-        else:
-            if not args.quiet:
-                print(
-                    f"[resuming session {session_id} — {len(initial_history)} prior messages]",
-                    file=sys.stderr,
-                )
+        elif not args.quiet:
+            note = f"[resuming session {session_id} — {len(initial_history)} prior messages"
+            if dropped > 0:
+                note += f"; {dropped} older message(s) dropped to keep input bounded"
+                note += " (raise --resume-max-messages or pass 0 to disable)"
+            print(note + "]", file=sys.stderr)
     if session_id is None:
         session_id = session_create(conn, str(cwd), args.model, task)
 
