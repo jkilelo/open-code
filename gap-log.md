@@ -422,6 +422,23 @@ Root cause: mix of (a) mojibake from cp1252 misread of UTF-8 multi-byte sequence
 
 **v0.24.4 ships [OK].** Every file in the repo renders identically on Windows cp1252, Linux/macOS UTF-8 terminals, and GitHub web view. 43/43 probes green; 54/54 security tests green.
 
+---
+
+## v0.25.0 -- 2026-05-11 (modern terminal UI with plain-text fallback)
+
+User asked for a modern UI/UX with optional text-only mode. After researching the Python terminal-UI landscape (Rich + Textual + prompt_toolkit; Aider's stack), shipped the Aider pattern: Rich for output, three modes (rich / plain / json), source stays pure ASCII.
+
+| Change | Status | Evidence |
+|--------|--------|----------|
+| New `ui.py` module (~285 LOC) with `UI` class + three modes (rich/plain/json) | [OK] | `tests/probe_ui.py` 6/6 |
+| `--plain` CLI flag + `NO_COLOR` / `OPEN_CODE_PLAIN` env support | [OK] | `--help` shows it; auto-detected when stderr not a TTY |
+| Refactored 5 tool-render call sites in `open_code.py` to route through UI | [OK] | full regression 43/43 still pass; rich + plain both verified |
+| REPL banner uses `ui.banner` (Panel in rich, plain text otherwise) | [OK] | probe asserts both shapes |
+| `rich>=14.0.0` added to requirements (2 deps -> 3) | [OK] | pure-Python, no compiled extensions |
+| Source stays ASCII (Rich's Unicode is runtime-only, not in source) | [OK] | `probe_ascii_only` still passes |
+
+**v0.25.0 ships [OK].** 44/44 probes green; 54/54 security tests green; ASCII guard still green. prompt_toolkit input-side deferred to v0.26 if requested.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

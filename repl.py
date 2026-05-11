@@ -78,10 +78,14 @@ def run_repl(
     initial_resume: bool,
     initial_resume_id: str | None,
     settings: Any = None,
+    ui: Any = None,
 ) -> int:
     """Interactive REPL. Persistent session; each prompt becomes a task."""
     # Late imports of open_code symbols to avoid a cycle at module load.
     from open_code import run_loop, expand_file_refs, _print_session_list
+    if ui is None:
+        from ui import UI as _UI
+        ui = _UI.auto(quiet=quiet)
 
     try:
         import readline  # noqa: F401  -- enables history + line editing
@@ -113,7 +117,7 @@ def run_repl(
     if session is None:
         session = store.create(str(cwd), model, "(REPL session)")
 
-    print(REPL_BANNER.format(sid=session.id, cwd=cwd))
+    ui.banner(session_id=session.id, cwd=str(cwd), model=model)
 
     current_model = model
     history: list[types.Content] = list(initial_history)
@@ -216,7 +220,7 @@ def run_repl(
                         verbose=not quiet, stream=stream,
                         system_instruction=system_instruction,
                         fire_session_start=(not history),
-                        settings=settings, is_repl=True,
+                        settings=settings, is_repl=True, ui=ui,
                     )
                 except KeyboardInterrupt:
                     settings.mode = prior_mode
@@ -292,7 +296,7 @@ def run_repl(
                         verbose=not quiet, stream=stream,
                         system_instruction=system_instruction,
                         fire_session_start=(not history),
-                        settings=settings, is_repl=True,
+                        settings=settings, is_repl=True, ui=ui,
                     )
                 except KeyboardInterrupt:
                     settings.mode = prior_mode
@@ -699,6 +703,7 @@ def run_repl(
                 fire_session_start=is_first_turn,
                 settings=settings,
                 is_repl=True,
+                ui=ui,
             )
         except KeyboardInterrupt:
             print("\n[interrupted; returning to prompt]", file=sys.stderr)

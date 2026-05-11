@@ -735,14 +735,26 @@ def run_loop(
     is_repl: bool = False,
     tool_allowlist: list[str] | None = None,
     expose_delegate: bool = True,
+    ui=None,  # type: ignore[no-untyped-def]
 ) -> tuple[int, dict[str, Any]]:
     """Run the agentic loop. Returns (exit_code, metrics)."""
     import hooks  # local import; cycle-safe
     from settings import Settings, evaluate_permission
     import subagents as _subagents
+    from ui import UI as _UICls
 
     if settings is None:
         settings = Settings()
+    # Lazy-init a UI if the caller didn't supply one. Auto-detects
+    # rich vs plain based on stderr's TTY-ness. JSON mode follows
+    # CONFIG.print_json (existing --print path).
+    if ui is None:
+        ui = _UICls.auto(
+            plain=False,
+            json_mode=getattr(CONFIG, "print_json", False),
+            quiet=not verbose,
+            stderr=True,
+        )
 
     client = genai.Client(api_key=api_key)
 
@@ -968,11 +980,13 @@ def run_loop(
             # is set, OR when verbose is True AND CONFIG.statusline_on
             # is True (set by --statusline).
             if verbose and getattr(CONFIG, "statusline_on", False):
-                sys.stderr.write(
-                    f"  [model={current_model} effort={getattr(settings, 'effort', '?')}"
-                    f" iter={iteration} in_tok={metrics['total_input_tokens']}"
-                    f" out_tok={metrics['total_output_tokens']}"
-                    f" tool_errs={metrics['tool_errors']}]\n"
+                ui.status_line(
+                    model=current_model,
+                    effort=getattr(settings, "effort", "?"),
+                    iter=iteration,
+                    in_tok=metrics["total_input_tokens"],
+                    out_tok=metrics["total_output_tokens"],
+                    tool_errs=metrics["tool_errors"],
                 )
 
             if function_calls:
@@ -982,7 +996,7 @@ def run_loop(
                     args = dict(fc.args) if fc.args else {}
                     metrics["tool_calls"] += 1
                     if verbose:
-                        print(_render_tool_call(name, args), file=sys.stderr)
+                        ui.tool_call(name, args)
                     # Tier 2 #20 --print: emit tool_use BEFORE evaluating
                     # permissions so consumers can correlate denials.
                     _emit_json("tool_use", iteration=iteration,
@@ -1024,7 +1038,7 @@ def run_loop(
                                   "error": f"permission denied ({why})"}
                         metrics["tool_errors"] += 1
                         if verbose:
-                            print(_render_tool_result(name, result), file=sys.stderr)
+                            ui.tool_result(name, result)
                         if store is not None and session is not None:
                             store.append_tool_refusal(
                                 session, tool=name,
@@ -1042,7 +1056,7 @@ def run_loop(
                                                 f"({why}); declining in one-shot mode")}
                             metrics["tool_errors"] += 1
                             if verbose:
-                                print(_render_tool_result(name, result), file=sys.stderr)
+                                ui.tool_result(name, result)
                             if store is not None and session is not None:
                                 store.append_tool_refusal(
                                     session, tool=name,
@@ -1144,7 +1158,7 @@ def run_loop(
                         result = {"ok": False, "error": f"blocked by hook: {pre.reason}"}
                         metrics["tool_errors"] += 1
                         if verbose:
-                            print(_render_tool_result(name, result), file=sys.stderr)
+                            ui.tool_result(name, result)
                         if store is not None and session is not None:
                             store.append_tool_refusal(
                                 session, tool=name,
@@ -1191,7 +1205,7 @@ def run_loop(
                                 args_snippet=_short(json.dumps(args), 200),
                             )
                     if verbose:
-                        print(_render_tool_result(name, result), file=sys.stderr)
+                        ui.tool_result(name, result)
                     # Tier 2 #20 --print: emit tool_result.
                     _emit_json("tool_result", iteration=iteration,
                                name=name, ok=bool(result.get("ok")),

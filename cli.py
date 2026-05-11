@@ -202,6 +202,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--quiet", "-q", action="store_true",
                         help="Suppress per-iteration trace.")
     parser.add_argument(
+        "--plain", action="store_true",
+        help="Plain ASCII output (no colors, no Unicode). Auto-enabled "
+             "when stderr is not a TTY OR when NO_COLOR / OPEN_CODE_PLAIN "
+             "env var is set.",
+    )
+    parser.add_argument(
         "--print", "-p", action="store_true", dest="print_json",
         help="Non-interactive JSON-lines output mode (Tier 2 #20). "
              "Emits one JSON object per line to stdout: session_start, "
@@ -238,6 +244,17 @@ def main(argv: list[str] | None = None) -> int:
     CONFIG.allow_dangerous = args.allow_dangerous
     # Tier 2 #14: status-line toggle (off by default)
     CONFIG.statusline_on = args.statusline  # type: ignore[attr-defined]
+
+    # UI: rich on a TTY, plain otherwise. --plain forces plain;
+    # --print (CONFIG.print_json) flips to json mode where UI calls
+    # are no-ops.
+    from ui import UI as _UI
+    ui = _UI.auto(
+        plain=args.plain,
+        json_mode=args.print_json,
+        quiet=args.quiet,
+        stderr=True,
+    )
 
     # Layered settings: ~/.open-code -> project -> project-local.
     # CLI flags + env vars STILL win (already applied above).
@@ -401,6 +418,7 @@ def main(argv: list[str] | None = None) -> int:
             initial_resume=args.resume,
             initial_resume_id=args.resume_id,
             settings=settings,
+            ui=ui,
         )
 
     task_expanded, refs = expand_file_refs(task, cwd)
@@ -455,6 +473,7 @@ def main(argv: list[str] | None = None) -> int:
             fire_session_start=True,
             settings=settings,
             is_repl=False,
+            ui=ui,
         )
     finally:
         if mcp_client is not None:
