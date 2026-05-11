@@ -1,3 +1,25 @@
+# MVP spec — v0.8.0 (Permission modes)
+
+> v0.8.0 (2026-05-11) implements Tier 1 #5 from
+> `roadmap/PROMPT-PACK.md`: permission modes.
+>
+> Builds on v0.6's permission rules. Adds a `mode` field to Settings
+> and the `--mode` CLI flag / `/mode` REPL command.
+>
+> ## v0.8 new assertions
+>
+> A26 `--mode plan` denies write_file + run_shell with a "plan mode"
+>     reason; the model adapts and narrates the plan as text.
+> A27 `--mode acceptEdits` converts `ask` decisions to `allow` for
+>     write_file (so `ask` rules don't pop a prompt every time).
+> A28 `--mode bypassPermissions` skips rule evaluation entirely;
+>     hard denylist (tools.py) + path sandbox are NOT bypassed.
+> A29 `mode:` in settings.json round-trips through load_layered_settings;
+>     invalid values fall back to `default`. CLI `--mode` overrides
+>     settings.mode.
+> A30 `/mode [name]` REPL command shows or sets the active mode
+>     mid-session.
+
 # MVP spec — v0.7.0 (Skills)
 
 > v0.7.0 (2026-05-11) implements Tier 1 #3 from

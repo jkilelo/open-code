@@ -49,6 +49,9 @@ class PermissionRules:
     deny: list[str] = field(default_factory=list)
 
 
+VALID_MODES = ("default", "acceptEdits", "plan", "auto", "bypassPermissions")
+
+
 @dataclass
 class Settings:
     """The merged settings handed to run_loop."""
@@ -57,6 +60,7 @@ class Settings:
     permissions: PermissionRules = field(default_factory=PermissionRules)
     hooks_disabled: bool = False
     statusline_template: str | None = None
+    mode: str = "default"  # one of VALID_MODES
     raw: dict[str, Any] = field(default_factory=dict)
     # Per-file paths that contributed (for diagnostics)
     sources: list[Path] = field(default_factory=list)
@@ -127,6 +131,9 @@ def load_layered_settings(cwd: Path) -> Settings:
         if raw:
             sources.append(p)
 
+    mode_raw = merged.get("mode")
+    mode = mode_raw if isinstance(mode_raw, str) and mode_raw in VALID_MODES else "default"
+
     return Settings(
         model=merged.get("model") if isinstance(merged.get("model"), str) else None,
         max_iterations=(merged.get("max_iterations")
@@ -134,6 +141,7 @@ def load_layered_settings(cwd: Path) -> Settings:
         permissions=perm,
         hooks_disabled=hooks_disabled,
         statusline_template=statusline_template,
+        mode=mode,
         raw=merged,
         sources=sources,
     )

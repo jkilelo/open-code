@@ -109,6 +109,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("OPEN_CODE_ROOT", str(DEFAULT_OC_ROOT)),
         help=f"Sessions root dir (default: {DEFAULT_OC_ROOT}).",
     )
+    parser.add_argument(
+        "--mode",
+        choices=("default", "acceptEdits", "plan", "auto", "bypassPermissions"),
+        default=None,
+        help=(
+            "Permission mode. default=ask on writes/shell; "
+            "acceptEdits=auto-allow writes; plan=narrate only (no edits, no shell); "
+            "bypassPermissions=skip rules (hard denylist still applies)."
+        ),
+    )
     parser.add_argument("--quiet", "-q", action="store_true",
                         help="Suppress per-iteration trace.")
     parser.add_argument(
@@ -141,6 +151,9 @@ def main(argv: list[str] | None = None) -> int:
     # Layered settings: ~/.open-code → project → project-local.
     # CLI flags + env vars STILL win (already applied above).
     settings = load_layered_settings(cwd)
+    # --mode flag overrides settings.mode
+    if args.mode is not None:
+        settings.mode = args.mode
     if settings.sources and not args.quiet:
         print(
             f"[loaded settings from {', '.join(str(p) for p in settings.sources)}]",

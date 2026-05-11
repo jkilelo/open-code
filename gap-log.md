@@ -115,6 +115,16 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 ---
 
+## v0.8.0 — 2026-05-11 (#5 Permission modes)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#5** | **Permission modes** (`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions` via `--mode`, settings.json, `/mode`) | ✅ | `tests/probe_modes.py` 7/7; live: `--mode plan` task "create setup.py + tests/" produced complete narrative plan with 2 refusals and **zero files on disk** |
+
+**v0.8.0 ships 🟢.**
+
+---
+
 ## Carried gaps (still ⚪)
 
 - ⚪ Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save)

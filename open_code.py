@@ -521,9 +521,26 @@ def run_loop(
 
                     # Permission rules (settings.json) — evaluated BEFORE
                     # PreToolUse hooks so deny/ask are deterministic.
-                    decision, why = evaluate_permission(
-                        name, args, settings.permissions
-                    )
+                    # Mode layers on top:
+                    #   bypassPermissions -> skip rule eval; always allow
+                    #   plan              -> deny write_file + run_shell (narrate only)
+                    #   acceptEdits       -> turn `ask` into `allow` for write_file
+                    #   default / auto    -> evaluate rules normally
+                    if settings.mode == "bypassPermissions":
+                        decision, why = ("allow", "bypassPermissions mode")
+                    elif settings.mode == "plan" and name in ("write_file", "run_shell"):
+                        decision, why = (
+                            "deny",
+                            f"plan mode: {name} disabled; narrate what you would do",
+                        )
+                    else:
+                        d0, w0 = evaluate_permission(
+                            name, args, settings.permissions
+                        )
+                        if settings.mode == "acceptEdits" and name == "write_file" and d0 == "ask":
+                            decision, why = ("allow", f"{w0} (acceptEdits)")
+                        else:
+                            decision, why = (d0, w0)
                     if decision == "deny":
                         result = {"ok": False,
                                   "error": f"permission denied ({why})"}
@@ -726,6 +743,7 @@ Slash commands:
   /dump              print the path of the JSONL transcript
   /skills            list skills under .open-code/skills/
   /skill <n> [args]  run a skill by name; $ARGUMENTS / $1.. interpolated
+  /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
 
 @-file references in prompts:
   Reference any local file with @path/to/file. open-code reads it and
@@ -856,6 +874,24 @@ def run_repl(
             if cmd == "skills":
                 import skills as _skills
                 print(_skills.render_skill_listing(_skills.discover_skills(cwd)))
+                continue
+            if cmd == "mode":
+                from settings import VALID_MODES
+                if not rest:
+                    print(
+                        f"current mode: {settings.mode if settings else 'default'}"
+                        f"\nvalid: {', '.join(VALID_MODES)}"
+                    )
+                    continue
+                if rest not in VALID_MODES:
+                    print(f"unknown mode {rest!r}; valid: {', '.join(VALID_MODES)}")
+                    continue
+                if settings is None:
+                    from settings import Settings as _S
+                    settings = _S(mode=rest)
+                else:
+                    settings.mode = rest
+                print(f"[mode set to {rest!r}]")
                 continue
             if cmd == "skill":
                 if not rest:
