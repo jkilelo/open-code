@@ -80,6 +80,21 @@ from tools import (
 # ---------------------------------------------------------------------------
 
 DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+
+
+# Module-level MCP client handle, set by cli.main when servers are
+# configured. run_loop reads it to surface mcp__* tools and route calls.
+_MCP_CLIENT = None
+
+
+def set_mcp_client(client) -> None:
+    """Called from cli.main once MCP servers have started."""
+    global _MCP_CLIENT
+    _MCP_CLIENT = client
+
+
+def get_mcp_client():
+    return _MCP_CLIENT
 DEFAULT_MAX_ITERATIONS = 25
 
 DEFAULT_OC_ROOT = Path.home() / ".open-code"
@@ -486,12 +501,16 @@ def run_loop(
     # Build the effective TOOL_DECLARATIONS list:
     # - Apply tool_allowlist if provided (subagent restriction)
     # - Append the delegate tool unless we're a subagent (no recursion)
+    # - Append every MCP server's tools (namespaced)
     effective_decls: list[dict[str, Any]] = []
     for decl in TOOL_DECLARATIONS:
         if tool_allowlist is None or decl["name"] in tool_allowlist:
             effective_decls.append(decl)
     if expose_delegate:
         effective_decls.append(_subagents.DELEGATE_TOOL_DECLARATION)
+    if _MCP_CLIENT is not None and tool_allowlist is None:
+        for d in _MCP_CLIENT.all_tool_declarations():
+            effective_decls.append(d)
 
     tools = [types.Tool(function_declarations=effective_decls)]
     config = types.GenerateContentConfig(
@@ -735,6 +754,8 @@ def run_loop(
                             cwd=CONFIG.cwd, system_instruction=system_instruction,
                             settings=settings,
                         )
+                    elif name.startswith("mcp__") and _MCP_CLIENT is not None:
+                        result = _MCP_CLIENT.call_tool(name, args)
                     elif fn is None:
                         result = {"ok": False, "error": f"unknown tool: {name}"}
                     else:

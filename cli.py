@@ -111,6 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
              "the system instruction.",
     )
     parser.add_argument(
+        "--no-mcp",
+        action="store_true",
+        help="Don't spawn MCP servers declared in settings.json.",
+    )
+    parser.add_argument(
         "--root",
         default=os.environ.get("OPEN_CODE_ROOT", str(DEFAULT_OC_ROOT)),
         help=f"Sessions root dir (default: {DEFAULT_OC_ROOT}).",
@@ -159,8 +164,10 @@ def main(argv: list[str] | None = None) -> int:
         load_project_context,
         build_system_instruction,
         expand_file_refs,
+        set_mcp_client,
     )
     from repl import run_repl
+    from mcp import MCPClient
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -180,6 +187,14 @@ def main(argv: list[str] | None = None) -> int:
         settings.architect_model = args.architect
     if args.editor is not None:
         settings.editor_model = args.editor
+
+    # Start any MCP servers declared in settings.json
+    mcp_client: MCPClient | None = None
+    mcp_servers_cfg = settings.raw.get("mcpServers") if settings.raw else None
+    if mcp_servers_cfg and not args.no_mcp:
+        mcp_client = MCPClient()
+        mcp_client.start_servers(mcp_servers_cfg)
+        set_mcp_client(mcp_client)
     if settings.sources and not args.quiet:
         print(
             f"[loaded settings from {', '.join(str(p) for p in settings.sources)}]",
@@ -308,21 +323,25 @@ def main(argv: list[str] | None = None) -> int:
     if session is None:
         session = store.create(str(cwd), args.model, task)
 
-    exit_code, metrics = run_loop(
-        task=task_expanded,
-        model=args.model,
-        api_key=api_key,
-        max_iterations=args.max_iterations,
-        store=store,
-        session=session,
-        initial_history=initial_history,
-        verbose=not args.quiet,
-        stream=not args.no_stream,
-        system_instruction=system_instruction,
-        fire_session_start=True,
-        settings=settings,
-        is_repl=False,
-    )
+    try:
+        exit_code, metrics = run_loop(
+            task=task_expanded,
+            model=args.model,
+            api_key=api_key,
+            max_iterations=args.max_iterations,
+            store=store,
+            session=session,
+            initial_history=initial_history,
+            verbose=not args.quiet,
+            stream=not args.no_stream,
+            system_instruction=system_instruction,
+            fire_session_start=True,
+            settings=settings,
+            is_repl=False,
+        )
+    finally:
+        if mcp_client is not None:
+            mcp_client.shutdown()
 
     if args.show_metrics:
         line = (

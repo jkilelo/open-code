@@ -174,6 +174,39 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 **v0.13.0 ships 🟢.** 9 of 10 Tier 1 features done. **Only #10 MCP remaining.**
 
+---
+
+## v0.14.0 — 2026-05-11 (#10 MCP servers — Tier 1 complete 🎉)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#10** | **MCP server support** (stdio JSON-RPC, hand-rolled — no `mcp` SDK; settings.json `mcpServers`; `mcp__<server>__<tool>` namespace; graceful startup-failure handling; `--no-mcp` flag) | ✅ | `tests/probe_mcp.py` 5/5 against a 30-line Python mock server: initialize handshake, tools/list discovery, tools/call routing with content, broken-server graceful skip, shutdown cleans up |
+
+**v0.14.0 ships 🟢.** 🎉 **All 10 Tier 1 features complete.**
+
+## Tier 1 final scoreboard
+
+| # | Feature | Version |
+|---|---------|---------|
+| #1 | Hooks system | v0.5 |
+| #2 | Settings hierarchy + permissions | v0.6 |
+| #3 | Skills | v0.7 |
+| #4 | Subagents / Task tool | v0.11 |
+| #5 | Permission modes | v0.8 |
+| #6 | Plan/Act | v0.9 |
+| #7 | Repo-map (Python-only, Aider-style) | v0.13 |
+| #8 | V4A apply_patch | v0.12 |
+| #9 | Architect/editor split | v0.10 |
+| #10 | MCP servers | v0.14 |
+
+## v0.4 → v0.14 summary
+
+- Files: 4 → 12 modules, max single file < 1000
+- LOC: 1793 → 4298
+- Probes: 10 → 20
+- All 54 security assertions still 🟢
+- Every release shipped with: spec update + probe + gap-log entry + runs/ doc + live evidence
+
 ## Tier 1 status
 
 | # | Feature | Status |
