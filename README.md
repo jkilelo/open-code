@@ -1,166 +1,401 @@
-# persona-mvp-kit
+# open-code
 
-A drop-in kit for **persona-driven minimum-viable-product development**
-with [Claude Code](https://code.claude.com).
+An LLM-agnostic terminal coding agent. Like Claude Code, but with a
+Gemini backend by default, ~5800 lines of pure-Python source, and a
+deliberately small footprint.
 
-## What this is
-
-A methodology + a portable set of guidelines + Claude Code mechanics
-(skills, subagents, hooks, slash commands, settings) that make Claude:
-
-1. **Refuse to write code** until concrete personas are documented (a
-   `PreToolUse` hook enforces this -- not advisory text)
-2. Build the **smallest possible slice that ships an actual user
-   workflow end-to-end** before adding anything else
-3. **Run the workflow as the persona** against real systems (real
-   APIs, real data -- never toy fixtures)
-4. **Brutally critique** whether the persona would actually use it
-   tomorrow, in an isolated subagent context that doesn't bloat the
-   main conversation
-5. **Fix root causes** -- not symptoms -- when gaps surface, via a
-   trace-three-deep subagent
-6. Ship in **tight commits** whose messages quote the persona's
-   success criterion
-
-## What it isn't
-
-- Not a code generator. Not a project scaffold. Not a template engine.
-- Not a methodology that produces "complete" software in one pass. It
-  produces a working slice plus a ratchet of improvements.
-
-## Why personas, not user stories or features
-
-A user story (`As a user, I want X so that Y`) describes a wish. A
-feature (`upload form`) describes a thing.
-
-A persona is a **constraint**: a named human with a real job, a real
-daily pain, a real workflow they're already doing the slow way. The
-persona's daily workflow IS the acceptance test. If your slice doesn't
-help that named person tomorrow morning, it doesn't ship -- no matter
-how good the code looks.
-
-This is the same shift that turned `agentGraph` from "a knowledge
-graph library" into a tool that catches multi-source contradictions
-($80M / $100M / $120M reported by 4 finance outlets) in 5 seconds
-with full citations. Without the Sarah-Chen persona, the same code is
-just a graph database.
-
-## How to use
-
-1. **Drop the kit into your project root.** Keep the `.claude/`
-   structure intact:
-
-   ```bash
-   cp -r persona-mvp-kit/. /path/to/your/project/
-   chmod +x /path/to/your/project/.claude/hooks/*.sh
-   ```
-
-   See [`INSTALL.md`](INSTALL.md) for full details.
-
-2. **Write your initial prompt.** See
-   [`prompts/starter-prompt.md`](prompts/starter-prompt.md). A typical
-   example:
-
-   > Build a full-stack FastAPI + SQLite + Tailwind + React app that
-   > hosts AI agents. Follow the persona-mvp-kit standard.
-
-3. **Claude reads `CLAUDE.md` first.** That file binds Claude to the 8
-   bright lines and the master loop. The `PreToolUse` hook on
-   `Edit|Write` deterministically blocks code edits when
-   `personas.md` doesn't exist.
-
-4. **Iterate.** Each session adds one ratchet step: another persona,
-   another workflow, another root-cause fix.
-
-## Contents
-
-| Path | Purpose |
-|---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Auto-loaded master rules. 8 bright lines + `@path` imports. ~130 lines (under the 200-line ceiling). |
-| [`CLAUDE.local.md.example`](CLAUDE.local.md.example) | Template for personal gitignored overrides (sandbox URLs, preferences). |
-| [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json) | Plugin manifest. Lets the kit install as a Claude Code plugin. |
-| [`.claude/settings.json`](.claude/settings.json) | Permissions + 5 hooks + `autoMode.hard_deny`. |
-| [`.claude/skills/`](.claude/skills/) | Four skills with modern frontmatter (`allowed-tools`, `context: fork`, dynamic context injection). |
-| [`.claude/agents/`](.claude/agents/) | Three subagents (persona-validator, brutal-reviewer, root-cause-tracer). |
-| [`.claude/hooks/`](.claude/hooks/) | Five hook scripts: require-personas (PreToolUse), remind-gap-log (PostToolUse), enforce-verification (Stop), session-start-context (SessionStart, dynamic), check-prompt-bypass (UserPromptSubmit). |
-| [`.claude/rules/`](.claude/rules/) | Five path-scoped rules. Load only when matching files are edited -- kit guidance "near" Claude without bloating CLAUDE.md. |
-| [`.claude/commands/`](.claude/commands/) | Four slash commands: /persona-extract, /mvp-spec, /run-as-persona, /trace-root-cause. |
-| [`.claude/output-styles/`](.claude/output-styles/) | `persona-driven.md` -- system-prompt-level framing in persona language. |
-| [`.mcp.json.example`](.mcp.json.example) | MCP server template. Rename to `.mcp.json`. |
-| [`methodology/`](methodology/) | 11 docs Claude reads on demand. Includes `CLAUDE-CODE-MECHANICS.md` cataloging the kit's 10-layer enforcement stack. |
-| [`templates/`](templates/) | Fill-in templates for personas, spec, gap-log, commit messages. |
-| [`examples/`](examples/) | Two worked examples (agentGraph retro + FastAPI/React walkthrough). |
-| [`prompts/`](prompts/) | Initial prompt shapes. |
-
-## Quick start
-
-```bash
-# 1. Install the kit
-cp -r persona-mvp-kit/. my-new-app/
-chmod +x my-new-app/.claude/hooks/*.sh
-cd my-new-app/
-
-# 2. Initialize git so commits work
-git init && git add . && git commit -m "Adopt persona-mvp-kit"
-
-# 3. Open Claude Code and prompt:
-#    "Build a [...] app. Follow the persona-mvp-kit standard."
+```
+pip install -r requirements.txt
+export GEMINI_API_KEY=...   # https://aistudio.google.com/app/apikey
+python open_code.py
 ```
 
-## What you should expect
+That drops you into a REPL with persistent history, autosuggest from
+your prior prompts, tab-complete on slash commands, and Rich-styled
+output. Pipe it (`open-code "task" | tee log`) and the output
+auto-degrades to pure ASCII. Pass `--print` and you get one JSON
+event per line, suitable for IDE integrations or CI scripts.
 
-**Session 1:** Claude won't write code. The `PreToolUse` hook blocks
-any source-file edit. Claude asks 2-4 extraction questions, drafts
-`personas.md` + `mvp-spec.md`, and waits for your confirmation.
+## What you get
 
-**Session 2:** Claude builds the smallest end-to-end slice. Real
-systems, real wiring. Runs the workflow as the persona, saves output
-to `runs/`. Brutal-reviewer subagent reports honestly: [OK]/[WARN]/[FAIL]/[X].
+- **REPL + one-shot** modes (`python open_code.py` vs `python open_code.py "task"`)
+- **Multi-turn conversations** with auto-saved JSONL transcripts under
+  `~/.open-code/projects/<encoded-cwd>/<uuid>.jsonl`
+- **Tool calls**: `read_file`, `write_file`, `list_dir`, `run_shell`
+- **V4A apply_patch** -- multi-file edits in a single envelope
+  (OpenAI Codex CLI-compatible)
+- **Permission model** -- `default` / `acceptEdits` / `plan` /
+  `bypassPermissions` modes; per-tool allow/ask/deny rules with
+  fnmatch + regex matchers; sticky-session "always" grants persist
+  to `.open-code/settings.local.json`
+- **Hooks** -- `PreToolUse` / `PostToolUse` / `Stop` / `SessionStart` /
+  `UserPromptSubmit` shell scripts in `.open-code/hooks/`, with a
+  per-project trust prompt (no RCE-by-clone)
+- **Skills** -- reusable prompt templates at
+  `.open-code/skills/<name>/SKILL.md` with `$ARGUMENTS` and
+  `` !`shell command` `` blocks; opt-in caching via `cache: true`
+- **Subagents** -- `delegate(agent, task)` tool with isolated
+  transcripts, restricted tool allowlists, no recursion
+- **Architect/editor split** -- different models for `/plan` vs `/act`
+- **Repo-map** -- Aider-style symbol skeleton with personalized
+  PageRank; auto-injected into the system prompt
+- **MCP servers** -- stdio JSON-RPC clients in `settings.json`
+- **Shadow-git checkpointing** -- `/checkpoint` / `/restore` / `/undo`
+  back to any prior turn without touching your real `.git/`
+- **Atomic-commit per turn** -- turn-start + turn-end snapshots
+  bracket every prompt
+- **`/compact`** -- LLM-summarize older history, keep recent N
+  messages verbatim
+- **Status line** + **effort levels** (`--effort low/medium/high/xhigh`)
+  + **ultrathink** keyword override
+- **Four-tier memory** -- global / ancestors / project / private
+  OPEN_CODE.md files
+- **Extended @-providers** -- `@README.md`, `@diff`, `@tree`,
+  `@problems`, `@cwd`
+- **Output styles** -- system-instruction overlays
+  (default / concise / explanatory / learning / pair-programmer / yolo)
+- **Plugins** -- bundles of skills + agents + styles at
+  `~/.open-code/plugins/<name>/`
+- **`/loop` + `/schedule`** -- repeat a task every N seconds, or
+  run once after a delay
+- **Managed (enterprise) settings** -- `/etc/open-code/managed.json`
+  overrides per-user choices for org-wide policy
 
-**Session 3+:** One root-cause fix per session, one ratchet
-improvement per commit, until the persona's success criterion is
-concretely [OK]. Then add the next persona.
+## Quick examples
 
-## Aligned with official Claude Code best practices
+```bash
+# One-shot
+python open_code.py "write a fizzbuzz to fizz.py and run it"
 
-The kit uses every documented Claude Code mechanic that helps its
-purpose. See [`methodology/CLAUDE-CODE-MECHANICS.md`](methodology/CLAUDE-CODE-MECHANICS.md)
-for the full 10-layer enforcement stack. Highlights:
+# REPL with autosuggest + history (~/.open-code/history.txt)
+python open_code.py
 
-- **CLAUDE.md under 200 lines** with `@path` imports -- long files
-  get half-ignored per official guidance
-- **`.claude/rules/`** with `paths:` frontmatter -- rules load only
-  when matching files are edited, keeping always-on context tiny
-- **Skills with progressive disclosure** -- descriptions cost ~100
-  tokens; full bodies load on demand; dynamic context injection
-  via `` !`shell command` `` syntax
-- **Skills with `context: fork`** -- heavy work runs in subagent
-  context, keeping main conversation clean
-- **Three subagents** for isolated reading (persona-validator,
-  brutal-reviewer, root-cause-tracer)
-- **Five hooks** for deterministic enforcement:
-  - `PreToolUse` blocks code edits without personas (exit 2)
-  - `PostToolUse` reminds gap-log updates
-  - `Stop` soft-blocks turn-end without verification
-  - `SessionStart` injects dynamic project state
-  - `UserPromptSubmit` detects bypass patterns
-- **Permissions** with conservative allow/ask/deny + `autoMode.hard_deny`
-- **`AGENTS.md` compatibility** via `@AGENTS.md` import (cross-tool)
-- **`/init` and `CLAUDE_CODE_NEW_INIT=1`** interactive setup (see
-  INSTALL.md)
-- **Plugin manifest** (`.claude-plugin/plugin.json`) for marketplace
-  distribution
-- **Output style** for system-prompt-level persona framing (optional)
-- **Verification-first** -- see
-  [`methodology/VERIFICATION-FIRST.md`](methodology/VERIFICATION-FIRST.md)
+# Plan mode -- read-only, narrates without writing
+python open_code.py --mode plan "refactor this for testability"
 
-References: [Best practices](https://code.claude.com/docs/en/best-practices) .
-[Skills](https://code.claude.com/docs/en/skills) .
-[Hooks](https://code.claude.com/docs/en/hooks) .
-[Subagents](https://code.claude.com/docs/en/sub-agents) .
-[Memory](https://code.claude.com/docs/en/memory) .
-[Plugins](https://code.claude.com/docs/en/plugins).
+# JSON output -- for IDE plugins / CI
+python open_code.py --print "summarize README.md"
+# emits one JSON event per line:
+#   {"type":"session_start","session_id":"...","model":"...","task":"...","cwd":"..."}
+#   {"type":"text","iteration":1,"text":"...","input_tokens":42,"output_tokens":120}
+#   {"type":"tool_use","iteration":1,"name":"read_file","args":{"path":"README.md"}}
+#   {"type":"tool_result","iteration":1,"name":"read_file","ok":true,"result":{...}}
+#   {"type":"session_end","session_id":"...","exit_code":0,"iterations":2,...}
+
+# Plain ASCII (auto-detected when piped; force with --plain or NO_COLOR=1)
+python open_code.py --plain "show me the tests"
+
+# Auto-checkpoint every turn; recoverable via /undo
+python open_code.py --auto-checkpoint
+
+# Resume a prior session
+python open_code.py --list-sessions
+python open_code.py --resume                 # most recent in this CWD
+python open_code.py --resume-id <uuid>       # specific
+```
+
+## REPL slash commands
+
+| Command | What it does |
+|---|---|
+| `/help` | Show all commands |
+| `/exit`, `/quit` | Leave |
+| `/clear` | Start a fresh session in this CWD |
+| `/sessions` | List recent sessions |
+| `/switch <uuid>` | Switch to a different session |
+| `/cost` | Cumulative tokens/iterations/refusals |
+| `/model <name>` | Change the model for subsequent turns |
+| `/dump` | Print the path of this session's JSONL |
+| `/skills` | List skills under `.open-code/skills/` |
+| `/skill <name> [args]` | Run a skill with `$ARGUMENTS` interpolation |
+| `/agents` | List subagents under `.open-code/agents/` |
+| `/compact [keep]` | Summarize older history; keep last N msgs verbatim |
+| `/effort [name]` | Show or set reasoning effort (low/medium/high/xhigh) |
+| `/style [name]` | Show or set output style overlay |
+| `/mode [name]` | Show or set permission mode |
+| `/plan <task>` | Read-only plan mode + save plan to session |
+| `/act [task]` | Load most recent plan + execute under `acceptEdits` |
+| `/checkpoints` | List shadow-git checkpoints |
+| `/checkpoint [label]` | Manual snapshot now |
+| `/restore <ref>` | Restore working tree to a prior checkpoint |
+| `/undo [N]` | Restore to start of Nth-most-recent turn |
+| `/loop <dur> <task>` | Repeat task every duration (e.g. `30`, `5m`, `1h`) |
+| `/schedule <dur> <task>` | Run task once after a delay |
+
+## @-references in prompts
+
+```
+> review @open_code.py and explain the run_loop
+> what changed since main? @diff
+> summarize the test failures @problems
+> what's in this dir? @tree
+> @cwd        -- absolute path of current working directory
+```
+
+Local files are read and injected. The `@diff` / `@tree` / `@problems`
+/ `@cwd` providers run shell commands at expansion time.
+
+## Configuration
+
+Layered, read in this order (later wins):
+
+1. `~/.open-code/settings.json` -- user
+2. `<cwd>/.open-code/settings.json` -- project (committed)
+3. `<cwd>/.open-code/settings.local.json` -- project, gitignored
+4. `/etc/open-code/managed.json` (POSIX) or
+   `%PROGRAMDATA%\open-code\managed.json` (Windows) -- enterprise
+
+Example `.open-code/settings.json`:
+
+```json
+{
+  "model": "gemini-3.1-flash-lite-preview",
+  "max_iterations": 25,
+  "permissions": {
+    "allow": ["read_file", "list_dir"],
+    "ask":   ["write_file"],
+    "deny":  ["run_shell(rm -rf *)", "run_shell(sudo *)"]
+  },
+  "models": {
+    "architect": "gemini-3.1-pro-preview",
+    "editor":    "gemini-3.1-flash-lite-preview"
+  },
+  "checkpoints": {"auto": true},
+  "output_style": "concise",
+  "effort": "medium",
+  "mcpServers": {
+    "ripgrep": {"command": "mcp-rg-server", "args": ["--root", "."]}
+  }
+}
+```
+
+Permission rules: `Tool` (any args), `Tool(specifier)` (fnmatch on
+arg values), `Tool(/regex/)` (regex search). Evaluation order is
+`deny > always_allow > ask > allow > default-allow`. `always_allow`
+is what the REPL's `[always]` prompt option writes.
+
+## Project memory (OPEN_CODE.md)
+
+Drop an `OPEN_CODE.md` in your project root with project-specific
+instructions. open-code auto-loads it (plus any in ancestor dirs,
+plus `~/.open-code/OPEN_CODE.md` for global memory, plus
+`.open-code/OPEN_CODE.local.md` for private overrides) and appends
+to the system instruction.
+
+## Skills
+
+A skill is a reusable, named prompt at
+`.open-code/skills/<name>/SKILL.md`:
+
+```markdown
+---
+name: review-pr
+description: Brutal-review a pull request against project standards
+allowed-tools: read_file, list_dir, run_shell
+cache: false
+---
+You are reviewing PR $ARGUMENTS.
+
+Project state:
+!`git status --short`
+!`git diff main --stat | head -40`
+
+Walk the diff. Find: untested branches, surface-area widening, ...
+```
+
+Invoke: `/skill review-pr 1234`. The `!` blocks run before the model
+sees the prompt; `$ARGUMENTS` / `$1` / `$N` are substituted.
+
+## Subagents
+
+`.open-code/agents/<name>.md`:
+
+```markdown
+---
+name: counter
+description: Counts files of a given type in this CWD
+model: gemini-3.1-flash-lite-preview
+allowed_tools: [list_dir, read_file]
+---
+You are a counting subagent. The user will ask you to count files.
+Use list_dir to inspect the working directory. Reply with one
+sentence: "There are N <type> files: a, b, c."
+```
+
+The main agent calls `delegate(agent="counter", task="count .txt
+files")`; the subagent gets its own isolated transcript.
+
+## Plugins
+
+A plugin bundles skills + agents + styles into one installable unit.
+Install by cloning into either:
+
+- `~/.open-code/plugins/<name>/` (user-wide)
+- `<cwd>/.open-code/plugins/<name>/` (project-local)
+
+Layout:
+
+```
+<plugin-name>/
+  plugin.json
+  skills/<skill-name>/SKILL.md
+  agents/<agent-name>.md
+  output-styles/<style-name>.md
+```
+
+`plugin.json`:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "description": "...",
+  "exposes": {
+    "skills":        ["review-pr"],
+    "agents":        ["counter"],
+    "output_styles": ["zen-mode"]
+  }
+}
+```
+
+`python open_code.py --list-plugins` shows what's installed.
+
+## Hooks
+
+Shell scripts under `.open-code/hooks/` fire on lifecycle events:
+
+| Event | When |
+|---|---|
+| `PreToolUse` | Before each tool call (block / modify args) |
+| `PostToolUse` | After each tool call |
+| `Stop` | Before exit (soft-block to force continuation) |
+| `SessionStart` | Once on entry (inject additional context) |
+| `UserPromptSubmit` | After user types a prompt (transform / block) |
+
+Hooks read JSON from stdin and write JSON to stdout. **The first
+time you `cd` into a project with a `.open-code/hooks/` dir,
+open-code asks for your trust.** Trust is per-CWD, persisted to
+`~/.open-code/trusted-projects.json`. Pass `--trust-hooks` once
+to accept without prompting; `--no-hooks` to disable entirely.
+
+## MCP servers
+
+Add to `settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    }
+  }
+}
+```
+
+Each server's tools become available as `mcp__<server>__<tool>`.
+The MCP client is hand-rolled (no `mcp` SDK dep): per-msg-id Event
+dispatch, separate stderr drainer, graceful startup-failure handling.
+
+## Output
+
+Three modes, auto-detected unless overridden:
+
+| Mode | When |
+|---|---|
+| `rich` | TTY stderr + no `NO_COLOR` / `OPEN_CODE_PLAIN` env |
+| `plain` | piped / `--plain` / `NO_COLOR=1` / `OPEN_CODE_PLAIN=1` |
+| `json` | `--print` -- one JSON event per line on stdout |
+
+REPL input (rich + TTY): prompt_toolkit gives you Up/Down history,
+autosuggest from history (fish-shell ghost text), Ctrl-R reverse
+search, and Tab completion for slash commands. History persists at
+`~/.open-code/history.txt`. Falls back to `input()` + readline if
+prompt_toolkit can't init (Git Bash on Windows, weird terminals).
+
+## Security
+
+- **Path sandbox** -- `write_file` refuses paths outside CWD unless
+  `--allow-outside-cwd`
+- **Shell denylist** -- `run_shell` refuses 13 destructive patterns
+  (`rm -rf /`, `sudo *`, `curl ... | sh`, etc.) unless
+  `--allow-dangerous`. 54-assertion security probe.
+- **Hook trust gate** -- per-project consent, persisted, prompts on
+  first encounter with `.open-code/hooks/`
+- **Permission rules** -- declarative deny/ask/allow at three layers
+- **Managed-settings layer** -- org-wide policy overrides for kiosk /
+  enterprise deployments
+- **Encoding** -- source files are 100% ASCII; enforced by a CI-style
+  probe so future commits can't add mojibake
+
+## Development
+
+Build discipline borrowed from the parent
+[persona-mvp-kit](https://github.com/jkilelo/ai_agents):
+
+- Every feature ships with a spec, a probe, a runs/ doc, a gap-log
+  entry, and a single commit
+- 45 probe files in `tests/`
+- 54-assertion security test in `tests/test_security.py`
+- ASCII-only guard in `tests/probe_ascii_only.py`
+- Four brutal-review cycles to date; every blocker closed before
+  the next feature
+
+To run the full regression locally:
+
+```bash
+for f in tests/probe_*.py; do python "$f" || echo "FAIL: $f"; done
+python tests/test_security.py
+```
+
+To normalize encoding if it ever drifts:
+
+```bash
+python scripts/fix_encoding.py
+python tests/probe_ascii_only.py   # verify
+```
+
+## How this differs from Claude Code / Aider
+
+| | Claude Code | Aider | open-code |
+|---|---|---|---|
+| Backend | Anthropic only | many | Gemini default, model-agnostic shape |
+| UI | rich + prompt_toolkit | rich + prompt_toolkit | rich + prompt_toolkit |
+| MCP servers | yes | no | yes |
+| Plugins | yes | no | yes |
+| Skills | yes | no | yes |
+| Subagents | yes | no | yes |
+| Hooks | yes | no | yes |
+| Repo-map | no | yes (tree-sitter) | yes (Python stdlib `ast` only) |
+| Shadow-git | yes | no | yes |
+| LOC | closed-source | ~20K LOC | ~5800 LOC |
+| Deps | closed-source | ~30 | 4 |
+
+open-code is not trying to beat them. It's trying to be small enough
+that you can read every line in an afternoon, hackable enough that
+adding a feature is a single commit, and honest about what it can
+and can't do (every gap is in `gap-log.md`).
 
 ## License
 
-Use this freely. Adapt it freely. If you make it better, send a PR.
+MIT. Use freely. If you make it better, PRs welcome.
+
+## Status
+
+Tier 1 (10 features) and Tier 2 (15 features) complete. 26 commits
+across the v0.1 -> v0.25 line. 4 brutal reviews completed; all
+findings closed. 45/45 probes green; 54/54 security tests green.
+
+Honest carry items (none corruption / hang / security; all
+documented in [gap-log.md](gap-log.md)):
+
+- Skills YAML edge cases (quoted strings, block scalars)
+- `--architect` / `--editor` flags are dead in one-shot mode
+  (only `/plan`+`/act` honor them)
+- `bypassPermissions` doesn't auto-imply `--allow-outside-cwd`
+  / `--allow-dangerous`
+- PageRank personalization concentration (mathematically correct,
+  aggressive ranking shift under task hints)
+
+If you find a real bug, file an issue with a reproducer. The
+build discipline is "every blocker closes with a probe."
