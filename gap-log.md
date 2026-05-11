@@ -279,6 +279,16 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.19.0 ships 🟢.** Tier 2: 10 of 15 features done. **Batch B complete (4/4).** Next: Batch C — 5 features (#21-25).
 
+---
+
+## v0.20.0 — 2026-05-11 (Tier 2 #25 — Batch C kickoff)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#25** | **Managed (enterprise) settings** (read AFTER user/project/local; default paths `/etc/open-code/managed.json` POSIX, `%PROGRAMDATA%\open-code\managed.json` Win; `OPEN_CODE_MANAGED_SETTINGS` env override accepts colon/semi-colon-separated list; managed sources appended to `s.sources` listing) | ✅ | `tests/probe_managed_settings.py` 5/5: managed overrides project model+hooks.disabled, managed deny rules UNION with project deny, non-existent managed path is silent no-op (not added to sources), deny still beats always_allow at managed layer, multiple managed paths last-wins |
+
+**v0.20.0 ships 🟢.** Tier 2: 11 of 15 features done. Next: #23 output styles, #21 skill caching, #22 plugins, #24 /loop+/schedule.
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

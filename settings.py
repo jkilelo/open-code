@@ -42,6 +42,27 @@ PROJECT_SETTINGS_REL = ".open-code/settings.json"
 PROJECT_LOCAL_SETTINGS_REL = ".open-code/settings.local.json"
 
 
+def _managed_settings_paths() -> list[Path]:
+    """Tier 2 #25 — managed (enterprise) settings paths.
+
+    Read AFTER user/project/local layers so they OVERRIDE individual
+    user choices. Intended for org-wide deny rules or forced
+    `hooks.disabled` rollouts.
+
+    Override-able for tests via the `OPEN_CODE_MANAGED_SETTINGS` env
+    var (colon-separated list of paths on POSIX, semicolon on Windows).
+    """
+    import os as _os
+    sep = ";" if _os.name == "nt" else ":"
+    env_override = _os.environ.get("OPEN_CODE_MANAGED_SETTINGS")
+    if env_override:
+        return [Path(p).expanduser() for p in env_override.split(sep) if p]
+    if _os.name == "nt":
+        program_data = _os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+        return [Path(program_data) / "open-code" / "managed.json"]
+    return [Path("/etc/open-code/managed.json")]
+
+
 @dataclass
 class PermissionRules:
     allow: list[str] = field(default_factory=list)
@@ -125,7 +146,11 @@ def _merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_layered_settings(cwd: Path) -> Settings:
-    """Read user / project / local in order; deep-merge; return Settings."""
+    """Read user / project / local / managed in order; deep-merge; return.
+
+    Tier 2 #25: managed (system-wide) settings are read LAST so they
+    override per-user / per-project choices.
+    """
     user_path = USER_SETTINGS_PATH
     project_path = cwd / PROJECT_SETTINGS_REL
     local_path = cwd / PROJECT_LOCAL_SETTINGS_REL
@@ -135,6 +160,13 @@ def load_layered_settings(cwd: Path) -> Settings:
     local = _load_one(local_path) or {}
 
     merged = _merge(_merge(user, project), local)
+    # Managed (enterprise) layer — last write wins.
+    managed_paths: list[Path] = []
+    for mp in _managed_settings_paths():
+        m = _load_one(mp)
+        if m is not None:
+            merged = _merge(merged, m)
+            managed_paths.append(mp)
 
     perm_dict = merged.get("permissions") or {}
     perm = PermissionRules(
@@ -152,6 +184,9 @@ def load_layered_settings(cwd: Path) -> Settings:
     for p, raw in ((user_path, user), (project_path, project), (local_path, local)):
         if raw:
             sources.append(p)
+    # Managed paths added last so a `--show-sources` listing makes the
+    # enforcement ordering obvious.
+    sources.extend(managed_paths)
 
     mode_raw = merged.get("mode")
     mode = mode_raw if isinstance(mode_raw, str) and mode_raw in VALID_MODES else "default"
