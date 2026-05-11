@@ -1,7 +1,7 @@
 """Probe: managed (enterprise) settings enforcement (Tier 2 #25).
 
 Verifies:
-  - OPEN_CODE_MANAGED_SETTINGS env var override is honored
+  - OPEN_CODE_MANAGED_SETTINGS_TEST env var override is honored
   - Managed settings override user/project/local
   - Managed deny rules union with project deny rules (defense-in-depth)
   - When no managed file exists, behavior matches pre-#25
@@ -38,11 +38,11 @@ with tempfile.TemporaryDirectory() as d:
         "model": "managed-model",
         "hooks": {"disabled": True},
     }), encoding="utf-8")
-    os.environ["OPEN_CODE_MANAGED_SETTINGS"] = str(mp)
+    os.environ["OPEN_CODE_MANAGED_SETTINGS_TEST"] = str(mp)
     try:
         s = S.load_layered_settings(base)
     finally:
-        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS", None)
+        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS_TEST", None)
     assert s.model == "managed-model", f"managed should override: got {s.model}"
     assert s.hooks_disabled is True, "managed hooks.disabled should win"
     assert mp in s.sources, f"managed path should appear in sources: {s.sources}"
@@ -63,11 +63,11 @@ with tempfile.TemporaryDirectory() as d:
     mp.write_text(json.dumps({
         "permissions": {"deny": ["run_shell(sudo *)"]},
     }), encoding="utf-8")
-    os.environ["OPEN_CODE_MANAGED_SETTINGS"] = str(mp)
+    os.environ["OPEN_CODE_MANAGED_SETTINGS_TEST"] = str(mp)
     try:
         s = S.load_layered_settings(base)
     finally:
-        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS", None)
+        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS_TEST", None)
     deny = s.permissions.deny
     assert "run_shell(rm *)" in deny, f"project deny missing from {deny}"
     assert "run_shell(sudo *)" in deny, f"managed deny missing from {deny}"
@@ -86,11 +86,11 @@ with tempfile.TemporaryDirectory() as d:
     }), encoding="utf-8")
     # Point env at a non-existent file
     nonexistent = base / "does-not-exist.json"
-    os.environ["OPEN_CODE_MANAGED_SETTINGS"] = str(nonexistent)
+    os.environ["OPEN_CODE_MANAGED_SETTINGS_TEST"] = str(nonexistent)
     try:
         s = S.load_layered_settings(base)
     finally:
-        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS", None)
+        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS_TEST", None)
     assert s.model == "project-only"
     assert nonexistent not in s.sources, \
         "non-existent managed path should NOT appear in sources"
@@ -111,11 +111,11 @@ with tempfile.TemporaryDirectory() as d:
             "always_allow": ["run_shell"],
         },
     }), encoding="utf-8")
-    os.environ["OPEN_CODE_MANAGED_SETTINGS"] = str(mp)
+    os.environ["OPEN_CODE_MANAGED_SETTINGS_TEST"] = str(mp)
     try:
         s = S.load_layered_settings(base)
     finally:
-        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS", None)
+        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS_TEST", None)
     decision, why = S.evaluate_permission(
         "run_shell", {"command": "ls"}, s.permissions,
     )
@@ -138,11 +138,11 @@ with tempfile.TemporaryDirectory() as d:
     m1.write_text(json.dumps({"model": "managed-1"}), encoding="utf-8")
     m2 = base / "m2.json"
     m2.write_text(json.dumps({"model": "managed-2"}), encoding="utf-8")
-    os.environ["OPEN_CODE_MANAGED_SETTINGS"] = f"{m1}{sep}{m2}"
+    os.environ["OPEN_CODE_MANAGED_SETTINGS_TEST"] = f"{m1}{sep}{m2}"
     try:
         s = S.load_layered_settings(base)
     finally:
-        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS", None)
+        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS_TEST", None)
     # m2 listed second, so its `model` wins
     assert s.model == "managed-2", f"expected managed-2; got {s.model}"
 print("[PASS] multiple managed paths layered last-wins")

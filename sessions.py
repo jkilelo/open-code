@@ -170,6 +170,10 @@ class SessionStore:
         self.root = root
         self.projects_dir = root / "projects"
         self.projects_dir.mkdir(parents=True, exist_ok=True)
+        # Brutal-review H4: cache message counts per session so
+        # append_message doesn't do an O(N) file scan every turn.
+        # Keyed by session.id. Lazily populated on first lookup.
+        self._msg_counts: dict[str, int] = {}
 
     # ---- path helpers ----
 
@@ -199,6 +203,10 @@ class SessionStore:
         with path.open("w", encoding="utf-8") as f:
             f.write(json.dumps(header) + "\n")
             f.flush()
+        # Prime the H4 message-count cache. A freshly-created session
+        # has zero messages, so future append_message calls can skip
+        # the cold-scan entirely.
+        self._msg_counts[sid] = 0
         return Session(
             id=sid, cwd=cwd, model=model, task=task, started_at=started, path=path
         )
@@ -211,8 +219,11 @@ class SessionStore:
             f.flush()
 
     def append_message(self, session: Session, content: types.Content) -> None:
-        # seq lets us reconstruct ordering without trusting file position
+        # seq lets us reconstruct ordering without trusting file position.
+        # H4 fix: in-memory counter avoids the O(N) scan per turn that
+        # accumulated to O(N²) over a long /loop or REPL session.
         seq = self._count_messages(session)
+        self._msg_counts[session.id] = seq + 1
         self._append(
             session,
             {
@@ -385,6 +396,16 @@ class SessionStore:
     # ---- discovery ----
 
     def _count_messages(self, session: Session) -> int:
+        """Return the current message count for `session`, caching the result.
+
+        First call for a session does the O(N) file scan (catches the
+        --resume case where messages exist on disk before this process
+        started writing). Subsequent calls in the same process return
+        the cached count, kept fresh by `append_message`.
+        """
+        cached = self._msg_counts.get(session.id)
+        if cached is not None:
+            return cached
         n = 0
         try:
             with session.path.open("r", encoding="utf-8") as f:
@@ -397,6 +418,7 @@ class SessionStore:
                         n += 1
         except OSError:
             pass
+        self._msg_counts[session.id] = n
         return n
 
     def _session_from_path(self, path: Path) -> Session | None:

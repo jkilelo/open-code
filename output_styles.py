@@ -76,12 +76,22 @@ def list_available(cwd: Path) -> list[tuple[str, str]]:
         seen[name] = "builtin"
     # Tier 2 #22: plugin-provided styles. Loaded between builtins
     # and user/project so users can still override.
+    # Brutal-review H2: narrowed from bare `except Exception` to
+    # the expected failure modes so a real bug in plugins.py
+    # surfaces instead of being silently swallowed.
     try:
         import plugins as _plugins
-        for style_name, _path, plugin in _plugins.list_plugin_output_styles(cwd):
-            seen[style_name] = f"plugin:{plugin.name}"
-    except Exception:
-        pass
+    except ImportError:
+        pass  # plugins module truly optional
+    else:
+        try:
+            for style_name, _path, plugin in _plugins.list_plugin_output_styles(cwd):
+                seen[style_name] = f"plugin:{plugin.name}"
+        except OSError as exc:
+            import sys as _sys
+            _sys.stderr.write(
+                f"[output_styles: plugin scan skipped: {exc}]\n"
+            )
     if USER_STYLES_DIR.exists():
         for f in USER_STYLES_DIR.glob("*.md"):
             seen[f.stem] = "user"
@@ -118,17 +128,28 @@ def resolve_overlay(style_name: str, cwd: Path) -> tuple[str, str]:
         except OSError:
             pass
     # Tier 2 #22 — plugin-provided
+    # Brutal-review H2: narrowed exception scope. ImportError is the
+    # only "plugins module unavailable" path; OSError covers file
+    # system issues during the scan. Any other exception is a real
+    # bug and should propagate.
     try:
         import plugins as _plugins
-        for s_name, s_path, plugin in _plugins.list_plugin_output_styles(cwd):
-            if s_name == name:
-                try:
-                    return (s_path.read_text(encoding="utf-8").strip(),
-                            f"plugin:{plugin.name}")
-                except OSError:
-                    pass
-    except Exception:
-        pass
+    except ImportError:
+        _plugins = None  # type: ignore[assignment]
+    if _plugins is not None:
+        try:
+            for s_name, s_path, plugin in _plugins.list_plugin_output_styles(cwd):
+                if s_name == name:
+                    try:
+                        return (s_path.read_text(encoding="utf-8").strip(),
+                                f"plugin:{plugin.name}")
+                    except OSError:
+                        pass
+        except OSError as exc:
+            import sys as _sys
+            _sys.stderr.write(
+                f"[output_styles: plugin scan skipped: {exc}]\n"
+            )
     # Built-in
     if name in BUILTIN_STYLES:
         return (BUILTIN_STYLES[name], f"builtin:{name}")

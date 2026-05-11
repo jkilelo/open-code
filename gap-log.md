@@ -373,9 +373,21 @@ The brutal review of v0.14.2→v0.24.0 returned **FAIL** with 3 claimed blockers
 
 ## Carried 🟡 (not fixed this cycle)
 
-- H2 (broad `except Exception` in output_styles plugin import)
-- H4 (O(N²) message-count scan in sessions.py — pre-Tier-2)
-- H5 (`OPEN_CODE_MANAGED_SETTINGS` env override as priv-esc surface)
+- H2 (broad `except Exception` in output_styles plugin import) — **closed in v0.24.2**
+- H4 (O(N²) message-count scan in sessions.py — pre-Tier-2) — **closed in v0.24.2**
+- H5 (`OPEN_CODE_MANAGED_SETTINGS` env override as priv-esc surface) — **closed in v0.24.2**
+
+---
+
+## v0.24.2 — 2026-05-11 (close all three brutal-review 🟡)
+
+| # | Fix | Status | Evidence |
+|---|-----|--------|----------|
+| **H2** | Narrow `except Exception` in plugin imports (`output_styles.py`, `skills.py`) — split into `ImportError` (module truly missing) + `OSError` (filesystem scan failure, logged to stderr). Real bugs now surface. | ✅ | probe_skills 9/9 + probe_output_styles 7/7 + probe_plugins 7/7 still pass |
+| **H4** | O(N²) message-count scan → O(1) cache. `SessionStore._msg_counts: dict[str, int]`. `create()` primes to 0; `append_message` reads cache + increments. `--resume` does ONE cold scan. | ✅ | `tests/probe_session_perf.py` 4/4: seq numbers monotonic, cache primed at create, 50 appends trigger ZERO read-opens (verified via `Path.open` patch), --resume scans exactly once |
+| **H5** | Rename `OPEN_CODE_MANAGED_SETTINGS` → `OPEN_CODE_MANAGED_SETTINGS_TEST` + stderr warning on use. Removes the env-controlled priv-esc surface for the highest-authority settings layer. | ✅ | probe_managed_settings 5/5 still pass under new env name |
+
+**v0.24.2 ships 🟢.** All brutal-review carry items closed. 42/42 probes green.
 
 ## Remaining 🟡 (carried to v0.15+)
 

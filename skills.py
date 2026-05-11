@@ -154,14 +154,23 @@ def discover_skills(cwd: Path) -> list[Skill]:
     skills_root = cwd / SKILLS_REL
     by_name: dict[str, Skill] = {}
     # Plugin-provided first; local overrides them later.
+    # Brutal-review H2: narrowed from bare `except Exception` so real
+    # bugs in plugin discovery surface instead of silently dropping
+    # plugin-provided skills.
     try:
         import plugins as _plugins
-        for skill_md, _plugin in _plugins.list_plugin_skill_dirs(cwd):
-            s = load_skill_file(skill_md)
-            if s is not None:
-                by_name[s.name] = s
-    except Exception:
-        pass  # plugins module is optional; never block skill discovery
+    except ImportError:
+        _plugins = None  # type: ignore[assignment]
+    if _plugins is not None:
+        try:
+            for skill_md, _plugin in _plugins.list_plugin_skill_dirs(cwd):
+                s = load_skill_file(skill_md)
+                if s is not None:
+                    by_name[s.name] = s
+        except OSError as exc:
+            sys.stderr.write(
+                f"[skills: plugin scan skipped: {exc}]\n"
+            )
     # Local skills
     if skills_root.exists() and skills_root.is_dir():
         for entry in sorted(skills_root.iterdir()):

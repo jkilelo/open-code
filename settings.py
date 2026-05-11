@@ -49,13 +49,23 @@ def _managed_settings_paths() -> list[Path]:
     user choices. Intended for org-wide deny rules or forced
     `hooks.disabled` rollouts.
 
-    Override-able for tests via the `OPEN_CODE_MANAGED_SETTINGS` env
-    var (colon-separated list of paths on POSIX, semicolon on Windows).
+    Brutal-review H5: the original env override (`OPEN_CODE_MANAGED_SETTINGS`)
+    was a priv-esc surface — a compromised subprocess could redirect
+    the highest-authority settings layer to an attacker-controlled
+    file before re-exec'ing open-code. The env var has been renamed
+    to `OPEN_CODE_MANAGED_SETTINGS_TEST` to make its test-only nature
+    explicit. We additionally emit a one-line stderr warning whenever
+    it's set, so a user who finds it set in their environment notices.
     """
     import os as _os
+    import sys as _sys
     sep = ";" if _os.name == "nt" else ":"
-    env_override = _os.environ.get("OPEN_CODE_MANAGED_SETTINGS")
+    env_override = _os.environ.get("OPEN_CODE_MANAGED_SETTINGS_TEST")
     if env_override:
+        _sys.stderr.write(
+            "[managed-settings: OPEN_CODE_MANAGED_SETTINGS_TEST is set; "
+            "using test override paths]\n"
+        )
         return [Path(p).expanduser() for p in env_override.split(sep) if p]
     if _os.name == "nt":
         program_data = _os.environ.get("PROGRAMDATA", r"C:\ProgramData")
