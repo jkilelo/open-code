@@ -437,10 +437,43 @@ class UI:
             return input(message)
 
     def reset_input(self) -> None:
-        """Drop the cached PromptSession. Called after /clear so the
-        new session starts with a fresh in-memory history (the file
-        history is unaffected and persists across REPL launches)."""
+        """Drop the cached PromptSession.
+
+        Available for callers that want a fresh PT session (e.g.
+        a future per-CWD history file). NOT currently called by
+        `/clear` -- preserving the PromptSession across `/clear`
+        keeps history + autosuggest warm, which is the better UX
+        default. Exposed in case a downstream consumer wants to
+        force a rebuild.
+        """
         self._pt_session = None
+
+    def empty_listing(self, message: str, *, kind: str = "listing") -> None:
+        """Emit an empty-state message that's visible in every mode.
+
+        v0.25.2 introduced a behavioral regression: routing
+        `print("(no sessions yet)")` through `ui.line()` made it a
+        no-op in json mode, so `--print --list-sessions` with no
+        sessions returned zero bytes. JSON consumers (CI, IDE
+        plugins) need SOME response.
+
+        In json mode this emits a one-line JSON event:
+            {"type":"listing_empty", "kind":"sessions", "message":"..."}
+        In every other mode it routes through `line()` -> plain text
+        (or rich-styled dim text if rich is active).
+        """
+        if self.mode == MODE_JSON:
+            try:
+                sys.stdout.write(json.dumps({
+                    "type": "listing_empty",
+                    "kind": kind,
+                    "message": message,
+                }) + "\n")
+                sys.stdout.flush()
+            except (OSError, ValueError):
+                pass
+            return
+        self.line(message)
 
     def table(self, *, title: str, columns: list[str],
               rows: list[list[str]]) -> None:

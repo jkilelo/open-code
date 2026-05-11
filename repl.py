@@ -171,7 +171,7 @@ def run_repl(
             if cmd == "sessions":
                 sess = store.list_for_cwd(str(cwd))
                 if not sess:
-                    ui.line("(no sessions yet)")
+                    ui.empty_listing("(no sessions yet)", kind="sessions")
                 else:
                     rows: list[list[str]] = []
                     for s in sess:
@@ -222,9 +222,10 @@ def run_repl(
                 import skills as _skills
                 skill_items = _skills.discover_skills(cwd)
                 if not skill_items:
-                    ui.line(
+                    ui.empty_listing(
                         "(no skills defined; create "
-                        ".open-code/skills/<name>/SKILL.md)"
+                        ".open-code/skills/<name>/SKILL.md)",
+                        kind="skills",
                     )
                 else:
                     rows = []
@@ -240,9 +241,10 @@ def run_repl(
                 import subagents as _subagents
                 agents_items = _subagents.discover_agents(cwd)
                 if not agents_items:
-                    ui.line(
+                    ui.empty_listing(
                         "(no agents defined; create "
-                        ".open-code/agents/<name>.md)"
+                        ".open-code/agents/<name>.md)",
+                        kind="agents",
                     )
                 else:
                     rows = []
@@ -449,7 +451,8 @@ def run_repl(
                     continue
                 ckpt_rows = _ckpt.list_checkpoints(cwd, limit=20)
                 if not ckpt_rows:
-                    ui.line("[no checkpoints yet]")
+                    ui.empty_listing("[no checkpoints yet]",
+                                     kind="checkpoints")
                     continue
                 table_rows = [
                     [r["short_sha"], r["ts"], r["label"]]
@@ -663,7 +666,7 @@ def run_repl(
                                 verbose=not quiet, stream=stream,
                                 system_instruction=system_instruction,
                                 fire_session_start=False,
-                                settings=settings, is_repl=True,
+                                settings=settings, is_repl=True, ui=ui,
                             )
                         except KeyboardInterrupt:
                             return False

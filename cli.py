@@ -277,7 +277,8 @@ def main(argv: list[str] | None = None) -> int:
         from output_styles import list_available
         styles_rows = list_available(cwd)
         if not styles_rows:
-            ui.line("(no output styles available)")
+            ui.empty_listing("(no output styles available)",
+                             kind="output_styles")
         else:
             ui.table(
                 title="Output styles",
@@ -290,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
         import plugins as _plugins
         ps = _plugins.discover_plugins(cwd)
         if not ps:
-            ui.line("(no plugins installed)")
+            ui.empty_listing("(no plugins installed)", kind="plugins")
         else:
             rows = []
             for p in ps:
@@ -383,7 +384,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         scope = "all directories" if args.list_sessions_all else str(cwd)
         if not sessions:
-            ui.line(f"(no sessions in {scope})")
+            ui.empty_listing(f"(no sessions in {scope})", kind="sessions")
         else:
             rows: list[list[str]] = []
             for s in sessions:

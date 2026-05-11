@@ -1,6 +1,7 @@
 """Probe: ui.py rendering across rich / plain / json modes."""
 from __future__ import annotations
 import io
+import json
 import os
 import sys
 from contextlib import redirect_stderr, redirect_stdout
@@ -168,6 +169,36 @@ assert u3.mode in ("plain", "rich"), f"unexpected mode {u3.mode}"
 # In test environments, stderr is usually NOT a TTY, so mode is plain.
 # This assertion is contextual; just verify the call succeeds.
 print(f"[PASS] UI.auto returns valid mode (got {u3.mode!r} in this env)")
+
+
+# ===========================================================================
+# Test 7 (closes brutal-review Y2): empty_listing emits visible output
+# in EVERY mode, including json. Before the fix, ui.line() was used for
+# empty-state messages and silently dropped them under --print.
+# ===========================================================================
+
+# plain mode -> plain text on stderr
+buf = io.StringIO()
+with redirect_stderr(buf):
+    u = UI_MOD.UI(mode="plain", stderr=True)
+    u.empty_listing("(no sessions)", kind="sessions")
+assert "(no sessions)" in buf.getvalue()
+assert all(ord(c) < 128 for c in buf.getvalue())
+
+# json mode -> JSON event on stdout (not stderr)
+buf_out = io.StringIO()
+buf_err = io.StringIO()
+with redirect_stdout(buf_out), redirect_stderr(buf_err):
+    u = UI_MOD.UI(mode="json", stderr=True)
+    u.empty_listing("(no sessions)", kind="sessions")
+assert buf_err.getvalue() == "", \
+    f"json empty_listing should NOT write to stderr; got {buf_err.getvalue()!r}"
+out = buf_out.getvalue().strip()
+assert out, "json empty_listing should produce stdout"
+event = json.loads(out)
+assert event == {"type": "listing_empty", "kind": "sessions",
+                 "message": "(no sessions)"}, f"got {event}"
+print("[PASS] empty_listing: visible in plain mode AND json mode (Y2 fix)")
 
 
 print("\nOK -- ui probes passed.")

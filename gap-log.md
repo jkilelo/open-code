@@ -479,6 +479,22 @@ Back-compat: original render functions kept exported (`skills.render_skill_listi
 
 **v0.25.2 ships [OK].** 45/45 probes green. Aider-style stack complete end-to-end.
 
+---
+
+## v0.25.3 -- 2026-05-11 (4th brutal review: PASS WITH BLEMISHES, both yellows closed)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| **Y1** `/loop` + `/schedule` callbacks didn't pass `ui=ui` to `run_loop` | [OK] confirmed + fixed | `_make_cb` closure now threads `ui=ui`; matches every other run_loop callsite |
+| **Y2** `ui.line()` no-op in json mode regressed empty-state messages for `--print` | [OK] confirmed + fixed | New `ui.empty_listing(message, kind)` emits `{"type":"listing_empty","kind":"...","message":"..."}` JSON in json mode, plain text otherwise. 7 call sites updated. New `probe_ui` test 7 is the regression guard |
+| P3 SLASH_COMMANDS missing /loop+/schedule | [X] refuted (already present at line 134) | - |
+| P5 `reset_input()` docstring misleading | [OK] fixed | rewrote to document `/clear` deliberately preserves the PromptSession |
+| P1 `/restore`+`/undo` use bare `input()` | deferred | confirmation prompts should not pollute history |
+| P2 Rich markup injection via `[brackets]` in tool output | deferred | pre-existing, not v0.25.x regression |
+| P4 permission-ask prompt uses `input()` | deferred | same rationale as P1 |
+
+**v0.25.3 ships [OK].** 45/45 probes green. Aider-style stack honestly complete.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)
