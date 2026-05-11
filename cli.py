@@ -119,6 +119,22 @@ def build_parser() -> argparse.ArgumentParser:
             "bypassPermissions=skip rules (hard denylist still applies)."
         ),
     )
+    parser.add_argument(
+        "--architect",
+        default=None,
+        help=(
+            "Model used by /plan (Aider-style architect/editor split). "
+            "Defaults to settings.models.architect, or falls back to --model."
+        ),
+    )
+    parser.add_argument(
+        "--editor",
+        default=None,
+        help=(
+            "Model used by /act. Defaults to settings.models.editor, "
+            "or falls back to --model."
+        ),
+    )
     parser.add_argument("--quiet", "-q", action="store_true",
                         help="Suppress per-iteration trace.")
     parser.add_argument(
@@ -154,6 +170,10 @@ def main(argv: list[str] | None = None) -> int:
     # --mode flag overrides settings.mode
     if args.mode is not None:
         settings.mode = args.mode
+    if args.architect is not None:
+        settings.architect_model = args.architect
+    if args.editor is not None:
+        settings.editor_model = args.editor
     if settings.sources and not args.quiet:
         print(
             f"[loaded settings from {', '.join(str(p) for p in settings.sources)}]",

@@ -133,6 +133,17 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 **v0.9.0 ships 🟢.**
 
+---
+
+## v0.10.0 — 2026-05-11 (repl.py refactor + #9 Architect/editor)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| - | repl.py extraction (v0.9 pre-commit) | ✅ | open_code 1105→728; repl.py 384; all 15 probes pass |
+| **#9** | **Architect/editor model split** (`settings.models.{architect,editor}` + `--architect`/`--editor`; /plan uses architect, /act uses editor) | ✅ | `tests/probe_architect_editor.py` 5/5; live with `--architect gemini-nonexistent-99 --editor gemini-3.1-flash-lite-preview`: plan fell-back via the v0.2.1 chain, act used editor explicitly, shell.py written + executed |
+
+**v0.10.0 ships 🟢.** 6 of 10 Tier 1 features done.
+
 ## Tier 1 status
 
 | # | Feature | Status |

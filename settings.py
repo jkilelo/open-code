@@ -61,6 +61,11 @@ class Settings:
     hooks_disabled: bool = False
     statusline_template: str | None = None
     mode: str = "default"  # one of VALID_MODES
+    # Architect/editor model split (Aider-style). When set, /plan uses
+    # `architect_model` and /act uses `editor_model`. Falls back to
+    # `model` (or the REPL's current_model) when None.
+    architect_model: str | None = None
+    editor_model: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
     # Per-file paths that contributed (for diagnostics)
     sources: list[Path] = field(default_factory=list)
@@ -134,6 +139,16 @@ def load_layered_settings(cwd: Path) -> Settings:
     mode_raw = merged.get("mode")
     mode = mode_raw if isinstance(mode_raw, str) and mode_raw in VALID_MODES else "default"
 
+    models_dict = merged.get("models") or {}
+    architect_model = (models_dict.get("architect")
+                       if isinstance(models_dict, dict) else None)
+    editor_model = (models_dict.get("editor")
+                    if isinstance(models_dict, dict) else None)
+    if not isinstance(architect_model, str):
+        architect_model = None
+    if not isinstance(editor_model, str):
+        editor_model = None
+
     return Settings(
         model=merged.get("model") if isinstance(merged.get("model"), str) else None,
         max_iterations=(merged.get("max_iterations")
@@ -142,6 +157,8 @@ def load_layered_settings(cwd: Path) -> Settings:
         hooks_disabled=hooks_disabled,
         statusline_template=statusline_template,
         mode=mode,
+        architect_model=architect_model,
+        editor_model=editor_model,
         raw=merged,
         sources=sources,
     )

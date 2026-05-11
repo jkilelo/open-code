@@ -188,10 +188,14 @@ def run_repl(
                 if refs and not quiet:
                     print(f"[expanded {len(refs)} @-file reference(s)]",
                           file=sys.stderr)
+                plan_model = settings.architect_model or current_model
+                if plan_model != current_model and not quiet:
+                    print(f"[plan using architect model {plan_model!r}]",
+                          file=sys.stderr)
                 try:
                     exit_code, metrics = run_loop(
                         task=task_expanded,
-                        model=current_model, api_key=api_key,
+                        model=plan_model, api_key=api_key,
                         max_iterations=max_iterations,
                         store=store, session=session,
                         initial_history=history,
@@ -258,13 +262,16 @@ def run_repl(
                     f"<plan id=\"{plan_id}\">\n{plan_text}\n</plan>\n\n"
                     f"{rest if rest else default_act_directive}"
                 )
+                act_model = settings.editor_model or current_model
                 if not quiet:
-                    print(f"[acting on plan {plan_id}; mode=acceptEdits]",
+                    suffix = (f" (editor model {act_model!r})"
+                              if act_model != current_model else "")
+                    print(f"[acting on plan {plan_id}; mode=acceptEdits{suffix}]",
                           file=sys.stderr)
                 try:
                     exit_code, metrics = run_loop(
                         task=task_with_plan,
-                        model=current_model, api_key=api_key,
+                        model=act_model, api_key=api_key,
                         max_iterations=max_iterations,
                         store=store, session=session,
                         initial_history=history,
