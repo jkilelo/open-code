@@ -201,7 +201,7 @@ def ensure_hooks_trusted(cwd: Path, *, interactive: bool = True,
             f"in {TRUSTED_PROJECTS_PATH}. Skipping.\n"
         )
         return False
-    # Unknown — prompt OR auto-deny (non-interactive one-shot).
+    # Unknown -- prompt OR auto-deny (non-interactive one-shot).
     inventory = _list_hook_scripts(hooks_root)
     if not interactive:
         sys.stderr.write(
@@ -327,7 +327,7 @@ def fire(event: str, cwd: Path, *, session_id: str,
     hooks_root = find_hooks_dir(cwd)
     if hooks_root is None:
         return result
-    # Trust gate — refuse hooks unless THIS project has been trusted
+    # Trust gate -- refuse hooks unless THIS project has been trusted
     # in this session. Trust is keyed by the project root (the parent
     # of `.open-code/`), not the user's working dir, so running open-
     # code from a subdir of a trusted repo still gets hooks.

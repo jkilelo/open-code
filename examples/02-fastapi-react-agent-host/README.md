@@ -1,4 +1,4 @@
-# Worked example 02 — FastAPI/React/SQLite/Tailwind agent host
+# Worked example 02 -- FastAPI/React/SQLite/Tailwind agent host
 
 This is what Claude WOULD do if a user copied the kit into a new
 project and prompted:
@@ -6,12 +6,12 @@ project and prompted:
 > Build a full-stack FastAPI + SQLite + Tailwind + React app that
 > hosts AI agents for multiple use cases.
 
-The example is illustrative — Claude doesn't actually build it here.
+The example is illustrative -- Claude doesn't actually build it here.
 But every step shows the kit's loop in action.
 
 ---
 
-## Session 1 — extraction (no code)
+## Session 1 -- extraction (no code)
 
 The prompt names a stack and a domain. It doesn't name a persona.
 
@@ -41,7 +41,7 @@ User responds:
 
 > Internal marketing analysts. Each agent helps with a different
 > part of their workflow. The first one's a "competitor brief"
-> agent — give it 10 URLs of competitor news, get a 5-bullet brief.
+> agent -- give it 10 URLs of competitor news, get a 5-bullet brief.
 > Currently they skim articles in browser tabs, copy-paste notes
 > into Notion, takes about 25 minutes per round. Goal: <90 seconds
 > from URL paste to brief in clipboard, ready to drop into a
@@ -52,9 +52,9 @@ Claude writes `personas.md`:
 ```markdown
 # Personas
 
-## Primary persona — v0.1 ships
+## Primary persona -- v0.1 ships
 
-### Sam Park — Marketing Analyst, mid-market SaaS company
+### Sam Park -- Marketing Analyst, mid-market SaaS company
 
 **Daily pain:** every Monday + Wednesday morning, Sam compiles a
 "competitor pulse" by skimming ~10 news articles from a list his
@@ -77,29 +77,29 @@ manually. If a bullet is unsupported by any URL, he doesn't trust
 the tool. If pasting into Slack mangles the markdown, he switches
 back to manual.
 
-## Secondary — v0.2
+## Secondary -- v0.2
 
-### Devin Liu — Marketing Ops Manager
+### Devin Liu -- Marketing Ops Manager
 [runs the ad-spend-analysis agent: parses GA4 export + paid
-spreadsheets to find anomalies — different workflow, different
+spreadsheets to find anomalies -- different workflow, different
 agent, different slice]
 
-## Tertiary — v0.3+
+## Tertiary -- v0.3+
 
-### Jordan Singh — Content Writer
-[blog-post-draft agent — different workflow, different slice]
+### Jordan Singh -- Content Writer
+[blog-post-draft agent -- different workflow, different slice]
 ```
 
 Claude shows the file. User confirms.
 
 ---
 
-## Session 1 (continued) — MVP spec
+## Session 1 (continued) -- MVP spec
 
 Claude writes `mvp-spec.md`:
 
 ```markdown
-# MVP spec — v0.1
+# MVP spec -- v0.1
 
 ## Persona shipped
 Sam Park (marketing analyst). See personas.md.
@@ -108,43 +108,43 @@ Sam Park (marketing analyst). See personas.md.
 "Sam pastes 10 URLs into a single web form, clicks 'summarize.'
 Within 90s, the page shows a 5-bullet brief, each bullet ending
 with `[^N]` citation linking to the source URL. Sam copies the
-markdown via Cmd+A / Cmd+C and pastes into Slack — markdown
+markdown via Cmd+A / Cmd+C and pastes into Slack -- markdown
 formatting survives. End-to-end on a typical Tuesday: <90s vs
 his current ~25 minutes."
 
 ## Smallest tech stack
-- **FastAPI** — Sam's workflow is "POST 10 URLs, get markdown
+- **FastAPI** -- Sam's workflow is "POST 10 URLs, get markdown
   back." Long-lived service. FastAPI's auto-OpenAPI gives a
   built-in "try it" UI for free.
-- **SQLite** — store {brief_id, urls (JSON array), output, created_at}.
+- **SQLite** -- store {brief_id, urls (JSON array), output, created_at}.
   Single user, <100MB ever. Single process.
-- **Gemini 1.5 Flash** — the user has a key configured. Single
+- **Gemini 1.5 Flash** -- the user has a key configured. Single
   model in v0.1.
-- **httpx + readability-lxml** — fetch + extract main article text
+- **httpx + readability-lxml** -- fetch + extract main article text
   from each URL. Two libraries because we need (a) HTTP client and
-  (b) HTML→text. Both small, both stable.
-- **React + Vite** (one page, no router) — Sam needs a paste-form
+  (b) HTML->text. Both small, both stable.
+- **React + Vite** (one page, no router) -- Sam needs a paste-form
   and a results area. No router because there's only one page.
-- **Tailwind defaults** — Sam isn't design-sensitive; brand
+- **Tailwind defaults** -- Sam isn't design-sensitive; brand
   guidelines TBD. Default Tailwind keeps the UI accessible.
 - **No ORM.** Raw SQL via stdlib `sqlite3`. The schema is one table
   with five columns; an ORM is overhead.
 - **No state management.** `useState` in App.tsx is enough.
 
 ## OUT of v0.1
-- Auth — Sam is the sole user; runs `npm run dev` + `python -m server`
-- Database migrations — one initial schema, edited in place
-- Deployment / Docker / CI — Sam runs locally
-- Multiple agents — only "competitor brief" agent in v0.1
-- Multi-LLM — Gemini 1.5 Flash hardcoded
-- Streaming responses — sync is fine at <90s
-- URL fetching with JS rendering — readability-lxml only;
+- Auth -- Sam is the sole user; runs `npm run dev` + `python -m server`
+- Database migrations -- one initial schema, edited in place
+- Deployment / Docker / CI -- Sam runs locally
+- Multiple agents -- only "competitor brief" agent in v0.1
+- Multi-LLM -- Gemini 1.5 Flash hardcoded
+- Streaming responses -- sync is fine at <90s
+- URL fetching with JS rendering -- readability-lxml only;
   JS-heavy sites fail loudly with "could not extract text from
-  URL N — paste body as fallback"
-- File / PDF / image inputs — URLs only
-- Scheduled / triggered runs — Sam clicks Submit
+  URL N -- paste body as fallback"
+- File / PDF / image inputs -- URLs only
+- Scheduled / triggered runs -- Sam clicks Submit
 - Rate limiting / retries / observability
-- Mobile UI — desktop only (Sam works on laptop)
+- Mobile UI -- desktop only (Sam works on laptop)
 - Dark mode
 
 ## How v0.1 ships
@@ -169,7 +169,7 @@ User confirms.
 
 ---
 
-## Session 2 — build the smallest e2e slice
+## Session 2 -- build the smallest e2e slice
 
 Claude builds in order:
 
@@ -190,7 +190,7 @@ class BriefResponse(BaseModel):
 
 @app.post("/briefs")
 def post_brief(req: BriefRequest) -> BriefResponse:
-    # TEMPORARY — returns hardcoded markdown so the frontend has
+    # TEMPORARY -- returns hardcoded markdown so the frontend has
     # something real to render against. Replaced in step 3.
     return BriefResponse(markdown=f"# Brief\n\n- (placeholder for {len(req.urls)} urls)")
 ```
@@ -320,7 +320,7 @@ frontend, one HTML index, one Vite config.
 
 ---
 
-## Session 3 — run as Sam
+## Session 3 -- run as Sam
 
 Claude opens both terminals, opens `localhost:5173`, pastes 10
 real URLs from a marketing news source, hits Submit, stopwatch.
@@ -328,7 +328,7 @@ real URLs from a marketing news source, hits Submit, stopwatch.
 `runs/2026-05-12-v0.1.0.md`:
 
 ```markdown
-# Run as Sam — 2026-05-12 v0.1.0
+# Run as Sam -- 2026-05-12 v0.1.0
 
 ## Setup
 Cold start: `pkill -f vite && pkill -f uvicorn`. Restarted both.
@@ -351,12 +351,12 @@ etc.) saved in /tmp/sam-urls.txt.
 - ... [3 more bullets]
 
 ## Five questions
-1. Workflow completed without intervention. ✅
+1. Workflow completed without intervention. [OK]
 2. Criterion met:
-   - 🟢 <90s (73s actual)
-   - 🟢 5 bullets each ending in [^N]
-   - 🟢 Each [^N] links to a URL in the input set
-   - 🟢 Markdown pastes cleanly into Slack (verified)
+   - [OK] <90s (73s actual)
+   - [OK] 5 bullets each ending in [^N]
+   - [OK] Each [^N] links to a URL in the input set
+   - [OK] Markdown pastes cleanly into Slack (verified)
 3. Faked: nothing significant. URL fetching uses real httpx, LLM
    is real Gemini, DB is real SQLite.
 4. Gaps observed:
@@ -364,7 +364,7 @@ etc.) saved in /tmp/sam-urls.txt.
      extracted only the meta description (~80 chars). The
      bullet citing [^4] references that URL but the underlying
      content is thin. Sam would notice on click-through. Add
-     an "extracted text was suspiciously short — paste body
+     an "extracted text was suspiciously short -- paste body
      instead?" warning at the URL level.
    - History panel works but doesn't show enough URL info to
      re-find a brief from yesterday. Show first URL or a
@@ -375,11 +375,11 @@ etc.) saved in /tmp/sam-urls.txt.
    for v0.1.1.
 ```
 
-🟢 Primary persona criterion concretely met. v0.1.0 is shippable.
+[OK] Primary persona criterion concretely met. v0.1.0 is shippable.
 
 ---
 
-## Session 4 — ratchet (v0.1.1)
+## Session 4 -- ratchet (v0.1.1)
 
 Address the two gaps in two commits, each with the persona quoted:
 
@@ -391,18 +391,18 @@ only the meta description (~80 chars). The brief bullet that cited
 [^4] was based on that 80 chars. Sam clicks through, sees the bullet
 doesn't match the article content. Trust collapses.
 
-Root cause: extraction failure was silent — empty/short text was
+Root cause: extraction failure was silent -- empty/short text was
 passed to the LLM, which made up a plausible-sounding summary.
 
 Fix: in fetch_article_text, if extracted body is <200 chars OR
 contains <30 distinct words, raise ShortContentError. The endpoint
 catches it and adds a warning to the article block in the prompt:
-"[N] URL=... — could not extract main content (paywall? JS?). Skip
+"[N] URL=... -- could not extract main content (paywall? JS?). Skip
 this article unless explicitly requested." LLM now omits weak
 bullets and explicitly says so.
 
 Verification: re-run with same 10 URLs. Brief now has 4 strong
-bullets and one explicit "[^4] not summarized — paywall detected."
+bullets and one explicit "[^4] not summarized -- paywall detected."
 Sam trusts it.
 ```
 
@@ -415,23 +415,23 @@ Tag `v0.1.1`.
 
 ---
 
-## Session 5 — adding Devin (v0.2)
+## Session 5 -- adding Devin (v0.2)
 
 After v0.1.x is solid for Sam, the user prompts:
 
 > Now add the ad-spend anomaly agent for Devin.
 
-Claude reads `personas.md` § Devin, writes `mvp-spec-v0.2.md` for
+Claude reads `personas.md` Sec. Devin, writes `mvp-spec-v0.2.md` for
 his workflow, builds the slice. Sam's slice is unchanged. Each agent
 is its own vertical; the host frame (FastAPI app, React shell,
-SQLite db, common UI) is the SAME — extended, not replaced.
+SQLite db, common UI) is the SAME -- extended, not replaced.
 
 Notably, what's NOT happening:
 
-- No "let me refactor the agent system to be pluggable" — earned by
+- No "let me refactor the agent system to be pluggable" -- earned by
   the second agent, not speculated for the first.
-- No "let me extract a base Agent class" — earned by THIRD agent.
-- No "let me add an agent registry pattern" — earned by N-many.
+- No "let me extract a base Agent class" -- earned by THIRD agent.
+- No "let me add an agent registry pattern" -- earned by N-many.
 
 Each abstraction earns its existence by N=2 minimum.
 
@@ -441,7 +441,7 @@ Each abstraction earns its existence by N=2 minimum.
 
 - **The first prompt extracts personas.** No code in session 1.
 - **The MVP spec is short.** 4 sections, persona-justified.
-- **Build is vertical.** Backend → frontend → wired → polish, in
+- **Build is vertical.** Backend -> frontend -> wired -> polish, in
   steps where each ends with a runnable workflow.
 - **Run as the persona** is the acceptance test, not unit tests.
 - **Gaps go to gap-log; commits close them one at a time.**

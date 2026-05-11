@@ -1,4 +1,4 @@
-"""Probe: V4A apply_patch — parser + applier edge cases."""
+"""Probe: V4A apply_patch -- parser + applier edge cases."""
 from __future__ import annotations
 import sys
 import tempfile

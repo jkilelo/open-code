@@ -134,7 +134,7 @@ def snapshot(cwd: Path, label: str, *,
         sha = (rev.stdout or "").strip()
         if not sha:
             return (None, "rev-parse returned empty sha")
-        return (sha, f"snapshot {sha[:10]} — {label_safe}")
+        return (sha, f"snapshot {sha[:10]} -- {label_safe}")
     except subprocess.CalledProcessError as exc:
         err = (exc.stderr or exc.stdout or "").strip()[:300]
         return (None, f"git error: {err}")

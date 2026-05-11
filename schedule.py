@@ -1,7 +1,7 @@
 """Lightweight loop + delayed scheduling (Tier 2 #24).
 
 REPL-local; no daemonization or persistence. Both `/loop` and
-`/schedule` block the REPL thread by design — interruptable with
+`/schedule` block the REPL thread by design -- interruptable with
 Ctrl-C.
 
 API surface:
@@ -94,7 +94,7 @@ def run_schedule_delayed(
 
     Returns the same stats type as run_loop_with_interval. Honors
     KeyboardInterrupt during the sleep (treated as a cancelled
-    schedule — iterations stays 0).
+    schedule -- iterations stays 0).
     """
     stats = SchedulerStats()
     t0 = time.perf_counter()

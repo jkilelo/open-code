@@ -1,6 +1,6 @@
 """Session storage for open-code (v0.3+).
 
-Replaces v0.2's SQLite layer with file-per-session JSONL — one append-only
+Replaces v0.2's SQLite layer with file-per-session JSONL -- one append-only
 event log per session, organized by CWD. Patterns borrowed from Claude
 Code's transcript layout:
 
@@ -14,7 +14,7 @@ Each line is one JSON event. Event `kind`s:
 - "end":     closing record (one per file, on clean exit)
 
 Append-only + per-event flush means partial output survives crashes or
-Ctrl-C — what Jeff wrote up to that point is on disk. The filesystem
+Ctrl-C -- what Jeff wrote up to that point is on disk. The filesystem
 is the index: `--list-sessions` is a directory scan, no DB to corrupt.
 """
 from __future__ import annotations
@@ -161,7 +161,7 @@ class SessionStore:
     """File-per-session JSONL store under `~/.open-code/projects/`.
 
     Thread-safety: each session is its own file. Two processes writing
-    to the same session concurrently is undefined — but that's a
+    to the same session concurrently is undefined -- but that's a
     user-error case (you'd have to explicitly --resume the same session
     in two terminals). Different sessions = different files = no race.
     """
@@ -221,7 +221,7 @@ class SessionStore:
     def append_message(self, session: Session, content: types.Content) -> None:
         # seq lets us reconstruct ordering without trusting file position.
         # H4 fix: in-memory counter avoids the O(N) scan per turn that
-        # accumulated to O(N²) over a long /loop or REPL session.
+        # accumulated to O(N^2) over a long /loop or REPL session.
         seq = self._count_messages(session)
         self._msg_counts[session.id] = seq + 1
         self._append(
@@ -284,7 +284,7 @@ class SessionStore:
         Subsequent --resume sees this event and replaces the dropped
         history with the summary as a single synthetic user message.
 
-        Note: `/compact` does NOT remove msg events from disk — it
+        Note: `/compact` does NOT remove msg events from disk -- it
         only appends a `kind:"compact"` event that `load_history`
         honors when reconstructing. So `_msg_counts` stays accurate
         (it counts physical msg events, which don't disappear). Seq
@@ -328,7 +328,7 @@ class SessionStore:
                            limit: int = 20) -> list[dict[str, Any]]:
         """Return recent `checkpoint` events from this session (newest first).
 
-        Optional `phase` filter ∈ {"turn-start", "turn-end", "manual"}.
+        Optional `phase` filter in {"turn-start", "turn-end", "manual"}.
         Used by `/undo` to find the most-recent turn-start sha to
         restore the workspace to.
         """

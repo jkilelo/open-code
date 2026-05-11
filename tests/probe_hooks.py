@@ -1,4 +1,4 @@
-"""Probe: hooks.py — fire(), discovery, exit-code conventions."""
+"""Probe: hooks.py -- fire(), discovery, exit-code conventions."""
 from __future__ import annotations
 import json
 import os

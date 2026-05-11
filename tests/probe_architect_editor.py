@@ -1,4 +1,4 @@
-"""Probe: architect/editor model split — settings parse + REPL wiring."""
+"""Probe: architect/editor model split -- settings parse + REPL wiring."""
 from __future__ import annotations
 import json
 import sys
@@ -61,7 +61,7 @@ print("[PASS] non-dict 'models' value -> Nones; no crash")
 
 
 # ---- Test 5: REPL /plan respects architect_model (smoke via mock) ----
-# This is a unit-level check of repl.py's plan branch — we verify the
+# This is a unit-level check of repl.py's plan branch -- we verify the
 # model swap happens by inspecting the run_loop call's first arg.
 import repl as _repl  # ensure it imports cleanly
 assert hasattr(_repl, "run_repl")

@@ -43,14 +43,14 @@ PROJECT_LOCAL_SETTINGS_REL = ".open-code/settings.local.json"
 
 
 def _managed_settings_paths() -> list[Path]:
-    """Tier 2 #25 — managed (enterprise) settings paths.
+    """Tier 2 #25 -- managed (enterprise) settings paths.
 
     Read AFTER user/project/local layers so they OVERRIDE individual
     user choices. Intended for org-wide deny rules or forced
     `hooks.disabled` rollouts.
 
     Brutal-review H5: the original env override (`OPEN_CODE_MANAGED_SETTINGS`)
-    was a priv-esc surface — a compromised subprocess could redirect
+    was a priv-esc surface -- a compromised subprocess could redirect
     the highest-authority settings layer to an attacker-controlled
     file before re-exec'ing open-code. The env var has been renamed
     to `OPEN_CODE_MANAGED_SETTINGS_TEST` to make its test-only nature
@@ -88,7 +88,7 @@ class PermissionRules:
     allow: list[str] = field(default_factory=list)
     ask: list[str] = field(default_factory=list)
     deny: list[str] = field(default_factory=list)
-    # Tier 2 #17 — sticky session permissions. Written by the REPL's
+    # Tier 2 #17 -- sticky session permissions. Written by the REPL's
     # "always" prompt choice. Wins over ask rules but loses to deny,
     # so the user can override a project-level ask=tool rule by
     # adding tool to their .open-code/settings.local.json
@@ -120,9 +120,9 @@ class Settings:
     effort: str = "medium"
     # Shadow-git checkpoints (Tier 2 #11). When True, run_loop snapshots
     # the working tree into `.open-code/checkpoints.git/` at the start
-    # of each turn. Off by default — requires `git` binary on PATH.
+    # of each turn. Off by default -- requires `git` binary on PATH.
     auto_checkpoint: bool = False
-    # Tier 2 #23 — named output style overlay for the system_instruction.
+    # Tier 2 #23 -- named output style overlay for the system_instruction.
     # See output_styles.py for built-ins. "default" = no overlay.
     output_style: str = "default"
     raw: dict[str, Any] = field(default_factory=dict)
@@ -183,7 +183,7 @@ def load_layered_settings(cwd: Path) -> Settings:
     local = _load_one(local_path) or {}
 
     merged = _merge(_merge(user, project), local)
-    # Managed (enterprise) layer — last write wins.
+    # Managed (enterprise) layer -- last write wins.
     managed_paths: list[Path] = []
     for mp in _managed_settings_paths():
         m = _load_one(mp)
@@ -285,7 +285,7 @@ def _match_rule(rule: str, tool: str, args: dict[str, Any]) -> bool:
 def evaluate_permission(
     tool: str, args: dict[str, Any], perm: PermissionRules
 ) -> tuple[str, str]:
-    """Return (decision, reason). decision ∈ {"allow","ask","deny"}.
+    """Return (decision, reason). decision in {"allow","ask","deny"}.
 
     Evaluation order: deny > ask > allow. Default if no rules match
     is allow.

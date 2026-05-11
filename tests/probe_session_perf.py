@@ -1,7 +1,7 @@
-"""Probe: brutal-review H4 fix — message-count caching.
+"""Probe: brutal-review H4 fix -- message-count caching.
 
 Before the fix, every `append_message` did a full file scan to assign
-seq, making N appends cost O(N²). After the fix, the counter is
+seq, making N appends cost O(N^2). After the fix, the counter is
 cached in memory and incremented per-append.
 
 Tests:
@@ -134,7 +134,7 @@ print("[PASS] resume scans exactly once, then caches")
 
 
 # ===========================================================================
-# Test 5: 3rd-brutal-review probe — post-compact seq numbers stay
+# Test 5: 3rd-brutal-review probe -- post-compact seq numbers stay
 # monotonic and contiguous across all msg events in the file.
 # This was claimed as a bug by the reviewer; the assertion below
 # verifies the claim was wrong and guards against future regressions.

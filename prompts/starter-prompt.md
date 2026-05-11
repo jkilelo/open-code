@@ -1,9 +1,9 @@
-# Starter prompt — how to invoke the kit
+# Starter prompt -- how to invoke the kit
 
 The kit is most effective when your first prompt makes the standard
 explicit. Pick one of the shapes below.
 
-## Shape 1 — pure persona-driven (recommended for greenfield)
+## Shape 1 -- pure persona-driven (recommended for greenfield)
 
 > Build [the thing], following the persona-mvp-kit standard in this
 > repo. Don't write any code until you've extracted personas and I've
@@ -16,7 +16,7 @@ Example:
 > this repo. Don't write any code until you've extracted personas and
 > I've confirmed the MVP spec.
 
-## Shape 2 — stack-named, kit-respected
+## Shape 2 -- stack-named, kit-respected
 
 > Build a full-stack [stack] app that [does X], following the
 > persona-mvp-kit standard. Use the named stack but justify each
@@ -31,7 +31,7 @@ Example:
 > dependency per-persona, and ship the smallest end-to-end slice
 > first.
 
-## Shape 3 — extending an existing project
+## Shape 3 -- extending an existing project
 
 > I want to add [capability] to this project. Apply the
 > persona-mvp-kit standard: identify which persona this serves
@@ -44,7 +44,7 @@ Example:
 > persona-mvp-kit standard: identify which persona this serves and
 > define the MVP bar in `mvp-spec-v0.2.md`.
 
-## Shape 4 — bug fix / improvement
+## Shape 4 -- bug fix / improvement
 
 > [Description of what's broken or missing]. Apply the
 > persona-mvp-kit standard: trace root cause 3-deep, name the
@@ -61,7 +61,7 @@ Example:
 The kit's `CLAUDE.md` is auto-loaded. You don't need to copy-paste
 its rules into every prompt. If Claude tries to skip a step (write
 code without personas, mock something that should be real, claim
-done without a `runs/` file), it's violating the kit — push back
+done without a `runs/` file), it's violating the kit -- push back
 and reference the section it skipped.
 
 ## What to expect on session 1
@@ -88,16 +88,16 @@ If you used Shape 3 or Shape 4:
 
 You can. The kit is a default, not a law. If you tell Claude
 explicitly to skip a step ("just give me a quick prototype, don't
-worry about personas"), it should comply — but it should also
+worry about personas"), it should comply -- but it should also
 warn you which step it's skipping and what that means for the
 output.
 
 ## Common first-prompt mistakes
 
-- **"Build me an MVP"** — too vague. Of what? For whom?
-- **"Use [stack]"** without saying what for — Claude has nothing to
+- **"Build me an MVP"** -- too vague. Of what? For whom?
+- **"Use [stack]"** without saying what for -- Claude has nothing to
   reason about.
-- **"It should be production-ready"** — production for whom? "Ready"
+- **"It should be production-ready"** -- production for whom? "Ready"
   per which persona's criterion?
 
 Each of these will trigger the extraction questions anyway. You

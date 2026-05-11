@@ -1,4 +1,4 @@
-# 06 — Fix root causes
+# 06 -- Fix root causes
 
 > When the brutal review found a gap, your next move decides whether
 > you're shipping software or papering over rot.
@@ -8,19 +8,19 @@
 When the workflow doesn't work, the natural instinct is to make the
 specific failure go away. That's a trap. Examples:
 
-- The brief returns 0 bullets → cap min_bullets to 1 with a default
+- The brief returns 0 bullets -> cap min_bullets to 1 with a default
   "no facts available" placeholder. **No.** The 0 bullets is a
   symptom; trace why no facts came back.
 
-- The latency exceeds 30s → add a UI spinner that distracts from the
+- The latency exceeds 30s -> add a UI spinner that distracts from the
   wait. **No.** The 30s is a symptom; trace which call dominates and
   fix that.
 
-- The query returns empty results when it shouldn't → catch + return
+- The query returns empty results when it shouldn't -> catch + return
   a hardcoded fallback. **No.** Empty result is a symptom; trace
   what's filtering everything out.
 
-- A test fails intermittently → mark it `@pytest.mark.flaky` and
+- A test fails intermittently -> mark it `@pytest.mark.flaky` and
   retry 3 times. **No.** Flakiness is a symptom; the test is detecting
   a real concurrency or state issue. Find it.
 
@@ -47,7 +47,7 @@ returning `accepted=0`):
 > mutation isn't affecting what fitness measures.
 >
 > **Why 3:** Because `retrieval_cost(store, suite)` was implemented
-> as `sum(span.text length) / len(suite)` — a property of the store,
+> as `sum(span.text length) / len(suite)` -- a property of the store,
 > not of how queries are answered. Mutations don't change the store.
 
 Stopping at "why 1" leads to: "make the comparison `<=`." Symptom
@@ -104,7 +104,7 @@ When tempted by these, refuse:
 
 - **"Let me add `if x is None` defensive checks everywhere."** If a
   value can be `None` and the code wasn't designed for it, the bug
-  is upstream — find why None arrived. Adding `is None` guards
+  is upstream -- find why None arrived. Adding `is None` guards
   scatters the upstream bug across many call sites.
 
 - **"This edge case probably won't happen in practice."** If you
@@ -161,7 +161,7 @@ After every root-cause fix:
 1. Run the workflow as the persona.
 2. Verify the original gap is gone.
 3. Verify no new gap appeared (regression).
-4. Update `gap-log.md`: mark the fixed gap as 🟢 with the commit SHA.
+4. Update `gap-log.md`: mark the fixed gap as [OK] with the commit SHA.
 5. Commit. See `07-SHIPPING.md`.
 
 If you can't get to step 4 with a clear conscience, you haven't
@@ -169,6 +169,6 @@ finished the fix.
 
 ## Read next
 
-- [`07-SHIPPING.md`](07-SHIPPING.md) — commit discipline + release
-- [`templates/commit-message.md`](../templates/commit-message.md) —
+- [`07-SHIPPING.md`](07-SHIPPING.md) -- commit discipline + release
+- [`templates/commit-message.md`](../templates/commit-message.md) --
   how the message should look

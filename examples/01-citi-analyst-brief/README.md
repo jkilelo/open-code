@@ -1,4 +1,4 @@
-# Worked example 01 — Citi analyst brief generator (agentGraph)
+# Worked example 01 -- Citi analyst brief generator (agentGraph)
 
 This is the build that produced the persona-mvp-kit. Reading it
 end-to-end shows what the methodology looks like in practice when the
@@ -13,7 +13,7 @@ persona-and-process retrospective.
 
 ## The opening prompt
 
-> Use the same personas to stretch the app — use real use cases where
+> Use the same personas to stretch the app -- use real use cases where
 > these personas face daily issues in their day-to-day activities,
 > and how our app helps. Be brutal honest. Anytime you see a gap, fix
 > it. Aim for genuinely make the system outperform humans.
@@ -27,7 +27,7 @@ fix root causes, ship.
 
 ## Personas (extracted from the prompt + prior context)
 
-### Primary — Sarah Chen
+### Primary -- Sarah Chen
 
 - **Role:** Senior Data Scientist, Citi Risk Analytics, NYC
 - **Daily pain:** reads ~200 fintech articles 7-9am every weekday,
@@ -43,13 +43,13 @@ fix root causes, ship.
   human would miss, every claim cited to a source span, ready
   before her 9:30am email.
 
-### Secondary — Maya Patel
+### Secondary -- Maya Patel
 
 - **Role:** Clinical Pharmacist, Mass General
 - **Workflow:** n-ary drug-drug-population interaction lookups
 - **Criterion:** clinical-grade citation traceback + confidence floor
 
-### Tertiary — Alex Rivera (PyPA), Jamie Park (ProPublica), Liu Wei
+### Tertiary -- Alex Rivera (PyPA), Jamie Park (ProPublica), Liu Wei
 (Stanford NLP). Each with their own workflow.
 
 The full personas were in the conversation; they didn't need a
@@ -82,7 +82,7 @@ OUT of this slice (deferred):
 
 Real systems used:
 - Real Gemini API via the user's `.env`
-- Real corpus (`tests/eval/corpora/p07_news_contradictions/`) — 4
+- Real corpus (`tests/eval/corpora/p07_news_contradictions/`) -- 4
   Nimbus AI funding articles
 - Real SQLite store from prior `agent-graph compile` runs
 
@@ -107,9 +107,9 @@ This was the brutal-review moment.
 
 The 5-question report:
 
-1. ✅ Workflow ran without intervention.
-2. 🔴 **Output FAILED criterion.** "Catches at least one cross-source
-   contradiction" — system reported "None detected" while the spans
+1. [OK] Workflow ran without intervention.
+2. [FAIL] **Output FAILED criterion.** "Catches at least one cross-source
+   contradiction" -- system reported "None detected" while the spans
    themselves contained $80M/$100M/$120M.
 3. Nothing faked.
 4. Gaps observed:
@@ -122,14 +122,14 @@ The 5-question report:
 
 ## Root-cause trace (3-deep)
 
-> **Why 1:** Gemini said "None detected" → it didn't see the
+> **Why 1:** Gemini said "None detected" -> it didn't see the
 > disagreement.
 >
-> **Why 2:** Gemini saw `[edge tuples]` not `[span text]` → the
+> **Why 2:** Gemini saw `[edge tuples]` not `[span text]` -> the
 > prompt didn't include verbatim spans.
 >
 > **Why 3:** The prompt was written generically without thinking
-> about contradiction detection — the FACTS block was a list of
+> about contradiction detection -- the FACTS block was a list of
 > abstract relations, when contradictions live in the SOURCE TEXT
 > describing those relations.
 
@@ -138,7 +138,7 @@ Fix shape: enrich the FACTS block with verbatim span snippets (max
 numerical / leadership / date disagreements.
 
 Touched: `brief.py:_BRIEF_PROMPT_TEMPLATE` (one prompt rewrite) and
-`brief.py:generate_brief` (one line — include `s.text` in
+`brief.py:generate_brief` (one line -- include `s.text` in
 facts_block formatter).
 
 ---
@@ -156,7 +156,7 @@ Output (verbatim):
   vs $120M (fact 1, 7, 13)
 ```
 
-🟢 Sarah's criterion concretely met. Workflow now beats her manual
+[OK] Sarah's criterion concretely met. Workflow now beats her manual
 process.
 
 ---
@@ -168,7 +168,7 @@ process.
 277f48c Jamie: agent-graph conflicts shows fuzzy edge-type variance (M3.live.4)
 1d09ab4 Alex: brief merges across LLM-driven label duplicates (M3.live.5)
 cad0fc8 Maya: --min-confidence floor for clinical safety (M3.live.6)
-3dcf1e6 Liu: autoresearch root-cause fix — accepted=0 → accepted=3 (M3.live.7)
+3dcf1e6 Liu: autoresearch root-cause fix -- accepted=0 -> accepted=3 (M3.live.7)
 ```
 
 Five personas. Five commits. Each commit names its persona, traces
@@ -199,9 +199,9 @@ is unambiguous about what user value shipped and what didn't.
 - **Sarah's web UI.** CLI works for her data-science setup; her PMs
   want point-and-click. Add a one-page React form.
 - **Sarah's overnight delta.** "What changed about Nimbus AI since
-  yesterday?" — needs incremental ingest + bi-temporal `--since` brief.
+  yesterday?" -- needs incremental ingest + bi-temporal `--since` brief.
 - **Maya's clinical-safety polish.** Confidence floor exists but the
   brief should also flag "fact retracted in a later source" not
   just "not in source."
 
-These wait until v0.1 is concretely ✅ for Sarah.
+These wait until v0.1 is concretely [OK] for Sarah.

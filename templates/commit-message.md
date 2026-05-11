@@ -28,7 +28,7 @@ Sarah: brief now catches multi-source numerical contradictions
 
 Persona pain: 4 finance articles report different funding amounts
 ($80M / $100M / $120M) for the same Series B round. Previous brief
-silently agreed on "secured Series B funding" — Sarah would have
+silently agreed on "secured Series B funding" -- Sarah would have
 written that into the credit committee email and been wrong.
 
 Root cause: the LLM brief prompt only saw abstracted edge tuples
@@ -50,17 +50,17 @@ returned
   - Funding amount: $80M (fact 3, 4, 5, 8, 9, 18) vs $100M (fact
     6, 10) vs $120M (fact 1, 7, 13)
 
-See runs/2026-05-10-v0.1.0.md § "Sarah's brief".
+See runs/2026-05-10-v0.1.0.md Sec. "Sarah's brief".
 ```
 
 ## Anti-pattern: vague messages
 
 ```
-fix bug                                # ❌ no persona, no context
-refactor brief module                  # ❌ no user value
-add feature                            # ❌ which persona benefits?
-WIP                                    # ❌ never commit WIP
-update some files                      # ❌ commit body should explain
+fix bug                                # [FAIL] no persona, no context
+refactor brief module                  # [FAIL] no user value
+add feature                            # [FAIL] which persona benefits?
+WIP                                    # [FAIL] never commit WIP
+update some files                      # [FAIL] commit body should explain
 ```
 
 If you can't write a real persona-language message, the commit isn't

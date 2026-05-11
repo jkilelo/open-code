@@ -22,7 +22,7 @@ external system (LLM API, third-party service, file system, network).
 
 - **Mocks behind the curtain in the build itself.** If `brief.py`
   returns canned output when its dependencies aren't available, the
-  brief doesn't actually work — but a casual reader thinks it does.
+  brief doesn't actually work -- but a casual reader thinks it does.
 - **Silent fallbacks.** `try: real_call() except: return ""` hides
   the real failure mode. The persona will hit it; you'll be blamed.
 - **"Demo mode" data that's hardcoded in the production code path.**
@@ -36,7 +36,7 @@ external system (LLM API, third-party service, file system, network).
   input from the user with Pydantic; let internal calls trust
   internal types.
 - **Loud failure at boundary errors.** When the LLM API is down,
-  surface that to the user with a clear diagnostic — don't return
+  surface that to the user with a clear diagnostic -- don't return
   empty results that look like "no data."
 - **Test fixtures in `tests/`.** Mocks live with tests, not with
   build code.
@@ -45,7 +45,7 @@ external system (LLM API, third-party service, file system, network).
 
 When you find yourself writing:
 
-- `try: ... except Exception: return <default>` — the exception is a
+- `try: ... except Exception: return <default>` -- the exception is a
   signal you're suppressing
 - `if result is None: result = {}` after a function that should never
   return None
@@ -55,5 +55,5 @@ When you find yourself writing:
 Each of these means the persona will see broken behavior labeled as
 "works." Refuse.
 
-See `@methodology/03-BUILD.md` § "Real systems, real data, real wiring."
-See `@methodology/ANTI-PATTERNS.md` § "Mocking what should be real."
+See `@methodology/03-BUILD.md` Sec. "Real systems, real data, real wiring."
+See `@methodology/ANTI-PATTERNS.md` Sec. "Mocking what should be real."

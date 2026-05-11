@@ -1,4 +1,4 @@
-"""Probe: brutal review B1 — does checkpoints.restore() delete files
+"""Probe: brutal review B1 -- does checkpoints.restore() delete files
 that the user has gitignored or that are listed in the shadow repo's
 info/exclude?
 
@@ -45,7 +45,7 @@ def _setup(base: Path) -> str:
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
     sha = _setup(base)
-    # Create a node_modules dir AFTER the snapshot — it's in EXCLUDE_LINES
+    # Create a node_modules dir AFTER the snapshot -- it's in EXCLUDE_LINES
     (base / "node_modules").mkdir()
     (base / "node_modules" / "package.json").write_text(
         '{"installed":"yes"}', encoding="utf-8",
@@ -111,7 +111,7 @@ with tempfile.TemporaryDirectory() as d:
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
     sha = _setup(base)
-    # Simulate something we wrote to .open-code/ between snapshots —
+    # Simulate something we wrote to .open-code/ between snapshots --
     # e.g. settings.local.json, session JSONLs.
     (base / ".open-code" / "settings.local.json").write_text(
         '{"private": true}', encoding="utf-8",
@@ -122,7 +122,7 @@ with tempfile.TemporaryDirectory() as d:
     if survived:
         print("[PASS] Scenario D: .open-code/ contents survive restore")
     else:
-        print("[FAIL] Scenario D: .open-code/ DELETED — would wipe our own state")
+        print("[FAIL] Scenario D: .open-code/ DELETED -- would wipe our own state")
         sys.exit(1)
 
 

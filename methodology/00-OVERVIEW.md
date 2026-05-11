@@ -1,4 +1,4 @@
-# 00 — Overview
+# 00 -- Overview
 
 The persona-driven MVP method, end to end.
 
@@ -10,7 +10,7 @@ reads cleanly. The README looks plausible. But no specific human is
 better off tomorrow than they were yesterday.
 
 This happens because the bar is wrong. "It compiles," "tests pass,"
-"the architecture is clean" — all true, all irrelevant. The right bar
+"the architecture is clean" -- all true, all irrelevant. The right bar
 is: **does a named human pick this over their current workflow?**
 
 The persona is the bar. The workflow is the test. The slice is what
@@ -19,15 +19,15 @@ you ship.
 ## The seven steps
 
 ```
-1. Extract personas       → personas.md
-2. Define the MVP bar     → mvp-spec.md
-3. Pick smallest stack    → tech choices justified per-persona
-4. Build the slice        → smallest end-to-end, real systems
-5. Run as the persona     → not "test passes", workflow runs
-6. Brutal honest review   → would they actually use this?
-7. Ship per-gap commits   → root cause fixed, persona quoted
-                          ↻ loop to step 5 until persona success
-                          ↻ then add the next persona
+1. Extract personas       -> personas.md
+2. Define the MVP bar     -> mvp-spec.md
+3. Pick smallest stack    -> tech choices justified per-persona
+4. Build the slice        -> smallest end-to-end, real systems
+5. Run as the persona     -> not "test passes", workflow runs
+6. Brutal honest review   -> would they actually use this?
+7. Ship per-gap commits   -> root cause fixed, persona quoted
+                          (loop) loop to step 5 until persona success
+                          (loop) then add the next persona
 ```
 
 Each step has a dedicated methodology file (`01-` through `07-`).
@@ -35,9 +35,9 @@ Each step has a dedicated methodology file (`01-` through `07-`).
 ## Why this works in practice
 
 We built `agentGraph` (a knowledge-graph layer for AI agents) using this
-method. Five fictional personas — Sarah the Citi risk analyst, Maya the
+method. Five fictional personas -- Sarah the Citi risk analyst, Maya the
 clinical pharmacist, Alex the OSS maintainer, Jamie the investigative
-journalist, Liu the ML researcher — each described with a real daily
+journalist, Liu the ML researcher -- each described with a real daily
 pain. Every commit either built or fixed something a named persona was
 blocked on.
 
@@ -50,7 +50,7 @@ Concrete results from running this method:
   citations. A human takes 30-45 minutes.
 
 - **Maya's workflow**: look up n-ary drug-drug-population interactions
-  (`warfarin + aspirin + elderly → bleeding risk`) before patient
+  (`warfarin + aspirin + elderly -> bleeding risk`) before patient
   discharge. The hyperedge-aware brief surfaces `(anticoagulant=Warfarin,
   antiplatelet=Aspirin, physiologic_process=Hemostasis) --
   drug_drug_interaction` from raw papers, with `--min-confidence 0.9`
@@ -59,7 +59,7 @@ Concrete results from running this method:
 - **Liu's workflow**: tune retrieval policy via auto-research loop. We
   found and fixed three stacked bugs that were silently making the
   loop a no-op. After the fix: 30 iterations, 3 accepted, retrieval
-  cost 2052 → 1926.2 (6.1% improvement).
+  cost 2052 -> 1926.2 (6.1% improvement).
 
 What made this work, more than any technical decision: **at every step
 we asked "would Sarah/Maya/Liu use this tomorrow?" and answered
@@ -77,8 +77,8 @@ was yes, we shipped and added the next persona.
   build and how to test, not how to position.
 
 - **Not test-driven development.** TDD pins technical contracts; this
-  pins user-value contracts. They compose well — write tests for the
-  workflow steps as you build them — but tests passing is not the
+  pins user-value contracts. They compose well -- write tests for the
+  workflow steps as you build them -- but tests passing is not the
   acceptance signal.
 
 - **Not "agile" or "lean."** Those methods give you process. This
@@ -114,10 +114,10 @@ neither.
 
 ## Read next
 
-- [`01-PERSONAS.md`](01-PERSONAS.md) — how to write a useful persona
-- [`02-MVP-BAR.md`](02-MVP-BAR.md) — defining the bar concretely
-- [`VERIFICATION-FIRST.md`](VERIFICATION-FIRST.md) — the #1 official
+- [`01-PERSONAS.md`](01-PERSONAS.md) -- how to write a useful persona
+- [`02-MVP-BAR.md`](02-MVP-BAR.md) -- defining the bar concretely
+- [`VERIFICATION-FIRST.md`](VERIFICATION-FIRST.md) -- the #1 official
   recommendation: give Claude a way to verify its work
-- [`CONTEXT-MANAGEMENT.md`](CONTEXT-MANAGEMENT.md) — `/clear`,
+- [`CONTEXT-MANAGEMENT.md`](CONTEXT-MANAGEMENT.md) -- `/clear`,
   `/compact`, `/rewind`, the 200k window, auto-compaction
-- [`ANTI-PATTERNS.md`](ANTI-PATTERNS.md) — what to never do
+- [`ANTI-PATTERNS.md`](ANTI-PATTERNS.md) -- what to never do

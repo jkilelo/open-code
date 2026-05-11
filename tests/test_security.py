@@ -120,14 +120,14 @@ def main() -> int:
         CONFIG.cwd = sandbox
         CONFIG.allow_outside_cwd = False
 
-        # Inside CWD — allowed
+        # Inside CWD -- allowed
         r = tool_write_file(str(sandbox / "inside.txt"), "ok")
         if _check("write inside CWD allowed", r.get("ok") is True, str(r)):
             passes += 1
         else:
             failures += 1
 
-        # Outside CWD via absolute path — refused
+        # Outside CWD via absolute path -- refused
         escape = outside / "escaped.txt"
         r = tool_write_file(str(escape), "should not exist")
         refused = r.get("ok") is False and "outside CWD" in (r.get("error") or "")
@@ -137,14 +137,14 @@ def main() -> int:
         else:
             failures += 1
 
-        # ../ relative escape — refused
+        # ../ relative escape -- refused
         r = tool_write_file("../escaped.txt", "should not exist either")
         if _check("write via ../ refused", r.get("ok") is False, str(r)):
             passes += 1
         else:
             failures += 1
 
-        # With override — allowed
+        # With override -- allowed
         CONFIG.allow_outside_cwd = True
         r = tool_write_file(str(escape), "now allowed")
         if _check(

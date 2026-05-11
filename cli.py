@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="open-code",
         description=(
-            "Terminal coding agent — LLM-agnostic (Gemini backend). "
+            "Terminal coding agent -- LLM-agnostic (Gemini backend). "
             "With no task, drops into a REPL. Otherwise runs one task "
             "and exits."
         ),
@@ -158,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--list-plugins",
         action="store_true",
-        help="List installed plugins (Tier 2 #22) — project + user — and exit.",
+        help="List installed plugins (Tier 2 #22) -- project + user -- and exit.",
     )
     parser.add_argument(
         "--auto-checkpoint",
@@ -239,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     # Tier 2 #14: status-line toggle (off by default)
     CONFIG.statusline_on = args.statusline  # type: ignore[attr-defined]
 
-    # Layered settings: ~/.open-code → project → project-local.
+    # Layered settings: ~/.open-code -> project -> project-local.
     # CLI flags + env vars STILL win (already applied above).
     settings = load_layered_settings(cwd)
     # --mode flag overrides settings.mode
@@ -357,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
-    # Tier 2 #23 — apply output-style overlay (if any) to the
+    # Tier 2 #23 -- apply output-style overlay (if any) to the
     # system_instruction. settings.output_style defaults to "default"
     # which is a no-op.
     if settings.output_style and settings.output_style != "default":
@@ -420,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         initial_history, dropped = store.load_history(session, args.resume_max_messages)
         if not args.quiet:
-            note = f"[resuming session {session.id} — {len(initial_history)} prior messages"
+            note = f"[resuming session {session.id} -- {len(initial_history)} prior messages"
             if dropped > 0:
                 note += f"; {dropped} older dropped (--resume-max-messages to adjust)"
             print(note + "]", file=sys.stderr)
@@ -433,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             initial_history, dropped = store.load_history(session, args.resume_max_messages)
             if not args.quiet:
-                note = f"[resuming session {session.id} — {len(initial_history)} prior messages"
+                note = f"[resuming session {session.id} -- {len(initial_history)} prior messages"
                 if dropped > 0:
                     note += f"; {dropped} older dropped (--resume-max-messages to adjust)"
                 print(note + "]", file=sys.stderr)

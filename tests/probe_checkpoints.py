@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory() as d:
         sha1, msg1 = CK.snapshot(base, "first snapshot")
         assert sha1, f"snapshot failed: {msg1}"
         assert len(sha1) == 40, f"expected full 40-char sha, got {len(sha1)}"
-        # A second snapshot with no changes — must still produce a NEW sha
+        # A second snapshot with no changes -- must still produce a NEW sha
         # because we pass --allow-empty
         sha2, _ = CK.snapshot(base, "no-change snapshot")
         assert sha2, "second snapshot returned None"
@@ -100,7 +100,7 @@ with tempfile.TemporaryDirectory() as d:
         # We can still see sha_v2 in `git log`
         rows = CK.list_checkpoints(base, limit=10)
         # After restore HEAD now points at sha_v1, but sha_v2 commit
-        # still exists in the object store — git log walks back from
+        # still exists in the object store -- git log walks back from
         # HEAD though, so v2 is no longer listed via log. That's the
         # expected git-style behavior. We confirm HEAD moved:
         assert rows[0]["sha"] == sha_v1
@@ -170,7 +170,7 @@ print("[PASS] append_checkpoint events recorded in JSONL")
 
 
 # ===========================================================================
-# Test 6: snapshot graceful when git is missing — covered by Test code
+# Test 6: snapshot graceful when git is missing -- covered by Test code
 # itself if _HAVE_GIT is False. Otherwise: simulate by forcing
 # CK._git_available to return False.
 # ===========================================================================

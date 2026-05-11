@@ -1,4 +1,4 @@
-"""Plugins system (Tier 2 #22) — bundles of skills + agents + styles.
+"""Plugins system (Tier 2 #22) -- bundles of skills + agents + styles.
 
 A plugin is a directory at one of:
 

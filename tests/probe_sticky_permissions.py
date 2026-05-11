@@ -116,7 +116,7 @@ with tempfile.TemporaryDirectory() as d:
     )
     assert d2 == "ask", (
         f"different command must require asking again; got {d2}: {why2}\n"
-        "This is the B2 regression — if a curl command is auto-allowed by "
+        "This is the B2 regression -- if a curl command is auto-allowed by "
         "an 'always' decision on 'npm install', the bug is back."
     )
     # Another distinct shell command also asks
@@ -232,7 +232,7 @@ with tempfile.TemporaryDirectory() as d:
         # Critical: if sticky bypass works, input() should NEVER be called.
         def _no_prompt(*args, **kwargs):
             raise AssertionError(
-                "input() was called — sticky-session bypass failed"
+                "input() was called -- sticky-session bypass failed"
             )
         with patch("open_code.genai.Client", _StubClient), \
              patch("builtins.input", _no_prompt):

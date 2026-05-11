@@ -353,7 +353,7 @@ def tool_apply_patch(patch: str) -> dict[str, Any]:
     return _apply_patch(patch)
 
 
-# Static V4A apply_patch tool declaration — kept here to avoid a load-time
+# Static V4A apply_patch tool declaration -- kept here to avoid a load-time
 # cycle with patches.py. The runtime body lives in patches.py.
 APPLY_PATCH_TOOL_DECLARATION = {
     "name": "apply_patch",
@@ -365,7 +365,7 @@ APPLY_PATCH_TOOL_DECLARATION = {
         "`*** Update File: <path>` (with `@@ anchor` lines and `+`/`-` "
         "diff lines), `*** Delete File: <path>`, or `*** Move to: <new>` "
         "(after an Update block). Hunks are anchored by surrounding "
-        "code, NOT line numbers — if the anchor is ambiguous the patch "
+        "code, NOT line numbers -- if the anchor is ambiguous the patch "
         "fails clean. Honors --allow-outside-cwd."
     ),
     "parameters": {

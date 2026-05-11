@@ -1,4 +1,4 @@
-# 02 — Defining the MVP bar
+# 02 -- Defining the MVP bar
 
 > "Minimum viable" is two words. Most builds get the first wrong by
 > adding things; this method gets the second wrong by accepting things
@@ -17,15 +17,15 @@ It answers four questions:
 4. **What's explicitly OUT of v0.1?**
 
 That's the whole document. If you find yourself adding more sections,
-stop — you're scoping creep.
+stop -- you're scoping creep.
 
 ## The success criterion must be measurable
 
 A vague criterion produces a vague slice. A concrete criterion forces
 a concrete slice.
 
-> ❌ "Brief is good and helpful"
-> ✅ "Given 4 input articles about one event, output a markdown brief
+> [FAIL] "Brief is good and helpful"
+> [OK] "Given 4 input articles about one event, output a markdown brief
 >     with 4-7 bullets, each grounded by a `[^N]` citation to a
 >     verbatim source span. If two sources report different numbers
 >     for the same fact (e.g. funding amount), brief includes a
@@ -60,12 +60,12 @@ need. Write the justification in `mvp-spec.md`:
 ```markdown
 ## Tech stack
 
-- **FastAPI** — Sarah needs a workflow that runs as a long-lived
+- **FastAPI** -- Sarah needs a workflow that runs as a long-lived
   service her team can hit; FastAPI's async + auto-OpenAPI matches
   this and is the smallest framework that handles it.
-- **SQLite** — Sarah's data is <100MB of news articles. Single
+- **SQLite** -- Sarah's data is <100MB of news articles. Single
   process. No need for Postgres in v0.1.
-- **OpenAI SDK** — needed for summary generation; persona criterion
+- **OpenAI SDK** -- needed for summary generation; persona criterion
   requires citation-grounded output.
 
 ## Out of v0.1
@@ -78,7 +78,7 @@ need. Write the justification in `mvp-spec.md`:
 ```
 
 If a piece can't be justified per-persona, it's out. "We'll need it
-later" is not a justification — it's deferred-design rot.
+later" is not a justification -- it's deferred-design rot.
 
 ## What goes OUT of v0.1
 
@@ -141,10 +141,10 @@ Right response: the prompt has a stack but no persona. You ask:
 Then `mvp-spec.md` becomes:
 
 ```markdown
-# MVP spec — v0.1
+# MVP spec -- v0.1
 
 ## Persona shipped
-Marketing analyst (Sam) — see personas.md.
+Marketing analyst (Sam) -- see personas.md.
 
 ## Success criterion
 Sam pastes 10 article URLs into a single web form, clicks "summarize."
@@ -154,26 +154,26 @@ markdown to Slack. End-to-end on a typical Tuesday: <90 seconds vs
 his current ~25 minutes.
 
 ## Smallest tech stack
-- FastAPI — single endpoint POST /briefs, takes URLs, returns markdown.
-- SQLite — store {brief_id, urls, output, created_at}. Lets Sam
+- FastAPI -- single endpoint POST /briefs, takes URLs, returns markdown.
+- SQLite -- store {brief_id, urls, output, created_at}. Lets Sam
   re-read past briefs.
-- React + Tailwind — one page, one form, one output area, one
+- React + Tailwind -- one page, one form, one output area, one
   history list.
 - One LLM SDK (Gemini OR OpenAI, pick whichever the user has a key
-  for) — for actual summarization.
+  for) -- for actual summarization.
 
 ## OUT of v0.1
 - User accounts / auth (Sam is the only user; runs locally)
 - Multi-LLM support (one LLM, hardcoded model id)
 - Streaming (synchronous is fine at <60s)
 - Article scraping infrastructure (assume URLs return readable text;
-  use a single library, fail loudly on JS-heavy sites — Sam can
+  use a single library, fail loudly on JS-heavy sites -- Sam can
   paste the article body if scraping fails)
 - Deployment / Docker / Tests-as-CI (Sam runs `python -m server` +
   `npm run dev`)
 - Tailwind theming / design system (default Tailwind, no custom)
 - Sources beyond URL (no PDF, no upload, no email forwarding)
-- Multiple agents (one workflow only — summarization)
+- Multiple agents (one workflow only -- summarization)
 - Rate limiting, retries, observability
 ```
 
@@ -182,5 +182,5 @@ build.
 
 ## Read next
 
-- [`03-BUILD.md`](03-BUILD.md) — actually building the slice
-- [`templates/mvp-spec.md`](../templates/mvp-spec.md) — fill-in template
+- [`03-BUILD.md`](03-BUILD.md) -- actually building the slice
+- [`templates/mvp-spec.md`](../templates/mvp-spec.md) -- fill-in template

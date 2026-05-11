@@ -1,4 +1,4 @@
-"""Probe: a chunk containing BOTH text AND a function_call — do both end up in history?"""
+"""Probe: a chunk containing BOTH text AND a function_call -- do both end up in history?"""
 from __future__ import annotations
 import sys, tempfile
 from pathlib import Path

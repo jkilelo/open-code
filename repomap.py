@@ -6,7 +6,7 @@ re-reading every file.
 
 v0.13 scope: Python only, stdlib `ast`. No tree-sitter dep yet.
 Polyglot extension is v0.14+. The graph + PageRank is hand-rolled
-(no networkx) — pure stdlib.
+(no networkx) -- pure stdlib.
 
 Algorithm:
   1. List tracked files via `git ls-files` (fallback: pathlib glob)
@@ -211,7 +211,7 @@ def pagerank(
                 incoming[tgt].append(src)
 
     # Iterate. Dangling nodes (out_degree==0) leak mass; redistribute it
-    # along v (not uniformly — that's the personalized-PageRank rule).
+    # along v (not uniformly -- that's the personalized-PageRank rule).
     for _ in range(iterations):
         dangling_mass = sum(scores[p] for p in nodes if out_degree[p] == 0)
         new_scores: dict[Path, float] = {}

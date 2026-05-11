@@ -1,4 +1,4 @@
-# 03 — Build the slice
+# 03 -- Build the slice
 
 Personas are confirmed. `mvp-spec.md` is signed off. Now you build.
 
@@ -12,12 +12,12 @@ done yet.
 Build the **thinnest vertical slice** through every layer first:
 
 ```
-v0.1.0:  one input → one transform → one output
-                       ↓
+v0.1.0:  one input -> one transform -> one output
+                       v
 v0.1.1:  + persistence so the output isn't lost
-                       ↓
+                       v
 v0.1.2:  + the second-most-important workflow detail
-                       ↓
+                       v
 v0.1.x:  + persona's stated criterion is met
 ```
 
@@ -26,14 +26,14 @@ workflow that the persona could trigger.
 
 ## Real systems, real data, real wiring
 
-Tests can stub at boundaries — that's fine. The build itself must:
+Tests can stub at boundaries -- that's fine. The build itself must:
 
 - Hit the real LLM (use the user's actual API key from `.env`).
 - Read the real database (real SQLite file, real schema).
 - Process the real input format the persona will send.
 - Produce real output the persona consumes.
 
-If any layer is stubbed, that's a known incomplete in `gap-log.md` —
+If any layer is stubbed, that's a known incomplete in `gap-log.md` --
 not "done" code with a stub hidden inside it. The user must be able to
 look at your output and trust that what they see is what runs.
 
@@ -79,7 +79,7 @@ For a given task, the smallest stack is usually:
 | Deployment | "run python && npm dev" | When persona consumes hosted URL |
 | CI | none | When team grows beyond 1 |
 
-These aren't rules — they're defaults. Override when the persona's
+These aren't rules -- they're defaults. Override when the persona's
 workflow plainly demands more. A persona using the system from a
 phone needs the frontend hosted; a persona at Citi needs auth even
 in v0.1 because of compliance.
@@ -93,12 +93,12 @@ clearer to the next reader.
 
 Common over-organization to refuse in v0.1:
 
-- `src/api/v1/`, `src/api/v2/` — there is no v2 yet
-- `services/`, `repositories/`, `dto/` — three layers of abstraction
+- `src/api/v1/`, `src/api/v2/` -- there is no v2 yet
+- `services/`, `repositories/`, `dto/` -- three layers of abstraction
   for one workflow is theatre
-- `config/development.json`, `config/production.json` — there is no
+- `config/development.json`, `config/production.json` -- there is no
   production yet
-- `tests/unit/`, `tests/integration/`, `tests/e2e/` — flat `tests/`
+- `tests/unit/`, `tests/integration/`, `tests/e2e/` -- flat `tests/`
   is fine until you have >50 tests
 
 Earned organization is fine. Speculative organization is rot.
@@ -107,7 +107,7 @@ Earned organization is fine. Speculative organization is rot.
 
 For input you control (your own internal calls), trust it. No defensive
 parameter validation. No "in case the dict is None." Internal types
-are types — let Python tell you when they're wrong.
+are types -- let Python tell you when they're wrong.
 
 For input you don't control (user input, LLM responses, external APIs),
 validate at the boundary, fail loudly on bad input. Don't:
@@ -156,7 +156,7 @@ Don't:
 
 - Commit unfinished half-states.
 - Squash everything into one big "first slice" commit.
-- Delay commits until the slice is "done" — incremental commits help
+- Delay commits until the slice is "done" -- incremental commits help
   the user see the slice take shape.
 
 Commit messages: see `templates/commit-message.md`.
@@ -176,6 +176,6 @@ no amount of additional code can find.
 
 ## Read next
 
-- [`04-RUN-THE-WORKFLOW.md`](04-RUN-THE-WORKFLOW.md) — adopt the
+- [`04-RUN-THE-WORKFLOW.md`](04-RUN-THE-WORKFLOW.md) -- adopt the
   persona to test
-- [`ANTI-PATTERNS.md`](ANTI-PATTERNS.md) — what to avoid during build
+- [`ANTI-PATTERNS.md`](ANTI-PATTERNS.md) -- what to avoid during build

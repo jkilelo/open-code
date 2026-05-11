@@ -1,4 +1,4 @@
-"""Probe: repomap.py — discovery, parsing, ranking, rendering."""
+"""Probe: repomap.py -- discovery, parsing, ranking, rendering."""
 from __future__ import annotations
 import sys
 import tempfile

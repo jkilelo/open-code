@@ -15,14 +15,14 @@ unless the persona's stated criterion is concretely met.
 
 In order:
 
-1. `personas.md` — the primary persona's success criterion (verbatim)
-2. `mvp-spec.md` — the four-section spec + verification protocol
-3. `gap-log.md` — what's been closed and what's still 🔴/🟡
-4. Latest file in `runs/` (sorted by name desc) — the actual run
+1. `personas.md` -- the primary persona's success criterion (verbatim)
+2. `mvp-spec.md` -- the four-section spec + verification protocol
+3. `gap-log.md` -- what's been closed and what's still [FAIL]/[WARN]
+4. Latest file in `runs/` (sorted by name desc) -- the actual run
    output from the build session
-5. Recent git log (last 10 commits) — what's been claimed as fixed
+5. Recent git log (last 10 commits) -- what's been claimed as fixed
 
-If any of (1) (2) (4) is missing, report that as the verdict — you
+If any of (1) (2) (4) is missing, report that as the verdict -- you
 cannot review a build that hasn't been run.
 
 ## The single question
@@ -36,12 +36,12 @@ in `mvp-spec.md`. Otherwise, no.
 
 ## Four-color verdict
 
-For each criterion in `mvp-spec.md` § "Success criterion":
+For each criterion in `mvp-spec.md` Sec. "Success criterion":
 
-- 🟢 **Met** — quote the run output line that satisfies it
-- 🟡 **Partial** — name the specific gap with measured numbers
-- 🔴 **Failed** — name what's broken
-- ⚫ **N/A** — confirm it's still OUT per spec § OUT
+- [OK] **Met** -- quote the run output line that satisfies it
+- [WARN] **Partial** -- name the specific gap with measured numbers
+- [FAIL] **Failed** -- name what's broken
+- [X] **N/A** -- confirm it's still OUT per spec Sec. OUT
 
 ## The embarrassed-to-show-them list
 
@@ -60,16 +60,16 @@ are the ratchet candidates. Prioritize:
 Use this structure exactly:
 
 ```
-# Brutal review — vX.Y.Z
+# Brutal review -- vX.Y.Z
 
 ## Verdict
-[PASS — shippable | FAIL — N blockers]
+[PASS -- shippable | FAIL -- N blockers]
 
 ## Criteria
-- 🟢 [criterion 1] → "[run output quote]"
-- 🟡 [criterion 2] → gap: [specific], fix shape: [...]
-- 🔴 [criterion 3] → failed because [...]
-- ⚫ [criterion 4] → N/A per mvp-spec.md § OUT
+- [OK] [criterion 1] -> "[run output quote]"
+- [WARN] [criterion 2] -> gap: [specific], fix shape: [...]
+- [FAIL] [criterion 3] -> failed because [...]
+- [X] [criterion 4] -> N/A per mvp-spec.md Sec. OUT
 
 ## Embarrassed-to-show-them
 - [item 1]
@@ -83,7 +83,7 @@ Use this structure exactly:
 - personas.md: [primary persona name]
 - mvp-spec.md criterion: "[verbatim]"
 - runs/ file: [filename]
-- gap-log status: [N 🟢, M 🟡, K 🔴]
+- gap-log status: [N [OK], M [WARN], K [FAIL]]
 ```
 
 ## Refuse to soften
@@ -93,7 +93,7 @@ start." Don't. The user copied this kit because they want truth. If
 the answer is "no, not yet," tell them exactly what would have to
 change for the answer to flip to "yes."
 
-If `runs/` is empty, the verdict is **🔴 FAILED — workflow not yet
+If `runs/` is empty, the verdict is **[FAIL] FAILED -- workflow not yet
 executed.** Don't speculate about whether the code probably works.
 
 ## Reference

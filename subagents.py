@@ -24,7 +24,7 @@ When the main agent calls `delegate(agent="explorer", task="...")`:
      `summary` of the tool result. We also write a `delegate` event
      into the parent's JSONL pointing at the subagent transcript.
 
-The subagent has NO access to the `delegate` tool itself — no
+The subagent has NO access to the `delegate` tool itself -- no
 recursion.
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ class Agent:
 
 
 def _parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
-    """Same minimal YAML subset as skills.py — keep them in sync."""
+    """Same minimal YAML subset as skills.py -- keep them in sync."""
     if not text.startswith("---"):
         return {}, text
     end = text.find("\n---", 3)

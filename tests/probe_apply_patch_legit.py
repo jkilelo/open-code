@@ -51,7 +51,7 @@ run_case(
 )
 
 # Case B: anchor includes leading indentation (4 spaces)
-# Note: V4A spec says anchors are written without leading ws — the
+# Note: V4A spec says anchors are written without leading ws -- the
 # parser strips it. But what if a user writes it WITH leading indent?
 run_case(
     "anchor_leading_indent",
@@ -145,7 +145,7 @@ run_case(
     "return 99",
 )
 
-# Case H: realistic patch from open-code's own README — typical code edit
+# Case H: realistic patch from open-code's own README -- typical code edit
 run_case(
     "typical_function_edit",
     "def compute(x, y):\n    z = x + y\n    return z\n",

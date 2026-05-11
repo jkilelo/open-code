@@ -8,7 +8,7 @@ when_to_use: Use after a build session that ships a workflow step; before invoki
 # Run the workflow as the persona
 
 Stop being the developer. Become the persona. Open the tools they'd
-use. Type what they'd type. Read the output the way they would —
+use. Type what they'd type. Read the output the way they would --
 distracted, before their morning meeting, with two minutes of
 attention.
 
@@ -16,14 +16,14 @@ attention.
 
 ```!
 echo "=== Workflow verification protocol ==="
-echo "Reading mvp-spec.md § 'How v0.1 is verified'..."
-test -f mvp-spec.md && grep -A 20 "How v0.1 is verified" mvp-spec.md || echo "MISSING — no verification protocol; spec invalid"
+echo "Reading mvp-spec.md Sec. 'How v0.1 is verified'..."
+test -f mvp-spec.md && grep -A 20 "How v0.1 is verified" mvp-spec.md || echo "MISSING -- no verification protocol; spec invalid"
 echo ""
 echo "Real systems available?"
-test -f .env && echo "✓ .env present" || echo "(no .env — real LLM key required)"
+test -f .env && echo "[OK] .env present" || echo "(no .env -- real LLM key required)"
 ```
 
-If `mvp-spec.md § "How v0.1 is verified"` is missing, the spec is
+If `mvp-spec.md Sec. "How v0.1 is verified"` is missing, the spec is
 invalid. Return to `/mvp-spec` to add that section before proceeding.
 
 ## What "real" means
@@ -32,7 +32,7 @@ The build you run must use:
 
 - **Real LLM API key** from `.env` (not mocked)
 - **Real input** the persona will actually use (real URLs, real PDFs,
-  real article text — not toy fixtures)
+  real article text -- not toy fixtures)
 - **Real time pressure** (start a stopwatch if the spec mentions
   latency)
 - **Real environment** (the persona's browser, terminal, phone)
@@ -58,7 +58,7 @@ After running, write this in the `runs/` file:
 
 ### 1. Did the workflow complete without you intervening?
 If you fixed paths, edited config, restarted services, or manually
-deserialized JSON — the persona would not have completed it. Note this.
+deserialized JSON -- the persona would not have completed it. Note this.
 
 ### 2. Does the output meet the spec criterion?
 Quote the criterion verbatim. Then quote the output that satisfies (or
@@ -79,9 +79,9 @@ Yes/no + 2-4 sentence explanation.
 
 Run the workflow at least three times:
 
-- **Run 1:** happy path — input you designed for
-- **Run 2:** real input — what the persona actually pastes
-- **Run 3:** tired-persona input — typos, partial input, distracted
+- **Run 1:** happy path -- input you designed for
+- **Run 2:** real input -- what the persona actually pastes
+- **Run 3:** tired-persona input -- typos, partial input, distracted
 
 Different runs surface different gaps.
 

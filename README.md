@@ -9,15 +9,15 @@ A methodology + a portable set of guidelines + Claude Code mechanics
 (skills, subagents, hooks, slash commands, settings) that make Claude:
 
 1. **Refuse to write code** until concrete personas are documented (a
-   `PreToolUse` hook enforces this — not advisory text)
+   `PreToolUse` hook enforces this -- not advisory text)
 2. Build the **smallest possible slice that ships an actual user
    workflow end-to-end** before adding anything else
 3. **Run the workflow as the persona** against real systems (real
-   APIs, real data — never toy fixtures)
+   APIs, real data -- never toy fixtures)
 4. **Brutally critique** whether the persona would actually use it
    tomorrow, in an isolated subagent context that doesn't bloat the
    main conversation
-5. **Fix root causes** — not symptoms — when gaps surface, via a
+5. **Fix root causes** -- not symptoms -- when gaps surface, via a
    trace-three-deep subagent
 6. Ship in **tight commits** whose messages quote the persona's
    success criterion
@@ -36,7 +36,7 @@ feature (`upload form`) describes a thing.
 A persona is a **constraint**: a named human with a real job, a real
 daily pain, a real workflow they're already doing the slow way. The
 persona's daily workflow IS the acceptance test. If your slice doesn't
-help that named person tomorrow morning, it doesn't ship — no matter
+help that named person tomorrow morning, it doesn't ship -- no matter
 how good the code looks.
 
 This is the same shift that turned `agentGraph` from "a knowledge
@@ -83,9 +83,9 @@ just a graph database.
 | [`.claude/skills/`](.claude/skills/) | Four skills with modern frontmatter (`allowed-tools`, `context: fork`, dynamic context injection). |
 | [`.claude/agents/`](.claude/agents/) | Three subagents (persona-validator, brutal-reviewer, root-cause-tracer). |
 | [`.claude/hooks/`](.claude/hooks/) | Five hook scripts: require-personas (PreToolUse), remind-gap-log (PostToolUse), enforce-verification (Stop), session-start-context (SessionStart, dynamic), check-prompt-bypass (UserPromptSubmit). |
-| [`.claude/rules/`](.claude/rules/) | Five path-scoped rules. Load only when matching files are edited — kit guidance "near" Claude without bloating CLAUDE.md. |
+| [`.claude/rules/`](.claude/rules/) | Five path-scoped rules. Load only when matching files are edited -- kit guidance "near" Claude without bloating CLAUDE.md. |
 | [`.claude/commands/`](.claude/commands/) | Four slash commands: /persona-extract, /mvp-spec, /run-as-persona, /trace-root-cause. |
-| [`.claude/output-styles/`](.claude/output-styles/) | `persona-driven.md` — system-prompt-level framing in persona language. |
+| [`.claude/output-styles/`](.claude/output-styles/) | `persona-driven.md` -- system-prompt-level framing in persona language. |
 | [`.mcp.json.example`](.mcp.json.example) | MCP server template. Rename to `.mcp.json`. |
 | [`methodology/`](methodology/) | 11 docs Claude reads on demand. Includes `CLAUDE-CODE-MECHANICS.md` cataloging the kit's 10-layer enforcement stack. |
 | [`templates/`](templates/) | Fill-in templates for personas, spec, gap-log, commit messages. |
@@ -115,11 +115,11 @@ any source-file edit. Claude asks 2-4 extraction questions, drafts
 
 **Session 2:** Claude builds the smallest end-to-end slice. Real
 systems, real wiring. Runs the workflow as the persona, saves output
-to `runs/`. Brutal-reviewer subagent reports honestly: 🟢/🟡/🔴/⚫.
+to `runs/`. Brutal-reviewer subagent reports honestly: [OK]/[WARN]/[FAIL]/[X].
 
 **Session 3+:** One root-cause fix per session, one ratchet
 improvement per commit, until the persona's success criterion is
-concretely 🟢. Then add the next persona.
+concretely [OK]. Then add the next persona.
 
 ## Aligned with official Claude Code best practices
 
@@ -127,14 +127,14 @@ The kit uses every documented Claude Code mechanic that helps its
 purpose. See [`methodology/CLAUDE-CODE-MECHANICS.md`](methodology/CLAUDE-CODE-MECHANICS.md)
 for the full 10-layer enforcement stack. Highlights:
 
-- **CLAUDE.md under 200 lines** with `@path` imports — long files
+- **CLAUDE.md under 200 lines** with `@path` imports -- long files
   get half-ignored per official guidance
-- **`.claude/rules/`** with `paths:` frontmatter — rules load only
+- **`.claude/rules/`** with `paths:` frontmatter -- rules load only
   when matching files are edited, keeping always-on context tiny
-- **Skills with progressive disclosure** — descriptions cost ~100
+- **Skills with progressive disclosure** -- descriptions cost ~100
   tokens; full bodies load on demand; dynamic context injection
   via `` !`shell command` `` syntax
-- **Skills with `context: fork`** — heavy work runs in subagent
+- **Skills with `context: fork`** -- heavy work runs in subagent
   context, keeping main conversation clean
 - **Three subagents** for isolated reading (persona-validator,
   brutal-reviewer, root-cause-tracer)
@@ -151,14 +151,14 @@ for the full 10-layer enforcement stack. Highlights:
 - **Plugin manifest** (`.claude-plugin/plugin.json`) for marketplace
   distribution
 - **Output style** for system-prompt-level persona framing (optional)
-- **Verification-first** — see
+- **Verification-first** -- see
   [`methodology/VERIFICATION-FIRST.md`](methodology/VERIFICATION-FIRST.md)
 
-References: [Best practices](https://code.claude.com/docs/en/best-practices) ·
-[Skills](https://code.claude.com/docs/en/skills) ·
-[Hooks](https://code.claude.com/docs/en/hooks) ·
-[Subagents](https://code.claude.com/docs/en/sub-agents) ·
-[Memory](https://code.claude.com/docs/en/memory) ·
+References: [Best practices](https://code.claude.com/docs/en/best-practices) .
+[Skills](https://code.claude.com/docs/en/skills) .
+[Hooks](https://code.claude.com/docs/en/hooks) .
+[Subagents](https://code.claude.com/docs/en/sub-agents) .
+[Memory](https://code.claude.com/docs/en/memory) .
 [Plugins](https://code.claude.com/docs/en/plugins).
 
 ## License

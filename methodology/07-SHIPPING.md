@@ -1,11 +1,11 @@
-# 07 — Shipping
+# 07 -- Shipping
 
 ## One commit per gap
 
 Every commit closes exactly one gap from `gap-log.md`. Not two; not
 half. One.
 
-Why: when the persona's experience changes — for better or worse — the
+Why: when the persona's experience changes -- for better or worse -- the
 user must be able to point at the commit that caused it. A commit that
 mixes a feature, a refactor, and a bug-fix is impossible to bisect.
 
@@ -13,7 +13,7 @@ mixes a feature, a refactor, and a bug-fix is impossible to bisect.
 
 Use `templates/commit-message.md` as the base. Every commit message:
 
-1. **Title (first line, ≤72 chars):** `<persona-name>: <one-sentence
+1. **Title (first line, <=72 chars):** `<persona-name>: <one-sentence
    description of what the commit ships, in the persona's terms>`.
 
 2. **Body:** explain (a) what was broken from the persona's
@@ -27,7 +27,7 @@ Sarah: brief now catches multi-source numerical contradictions
 
 Persona pain: 4 finance articles report different funding amounts
 ($80M / $100M / $120M) for the same Series B round. Previous brief
-silently agreed on "secured Series B funding" — Sarah would have
+silently agreed on "secured Series B funding" -- Sarah would have
 written that into the credit committee email and been wrong.
 
 Root cause: the LLM brief prompt only saw abstracted edge tuples
@@ -85,10 +85,10 @@ the cause, names the verification. No commit is just "fix bug" or
 `gap-log.md` is the running record of what's blocking each persona.
 Update it AT EVERY STEP:
 
-- When you find a gap during run-the-workflow → add it as 🔴.
-- When you start fixing it → mark 🟡 in-progress.
-- When you commit the fix → mark 🟢 with SHA + verification quote.
-- When you decide to defer → mark ⚫ with reason ("deferred to v0.2
+- When you find a gap during run-the-workflow -> add it as [FAIL].
+- When you start fixing it -> mark [WARN] in-progress.
+- When you commit the fix -> mark [OK] with SHA + verification quote.
+- When you decide to defer -> mark [X] with reason ("deferred to v0.2
   per Maya's decision date 2026-05-10").
 
 The user reads `gap-log.md` to know what's done and what's outstanding.
@@ -99,15 +99,15 @@ A stale log makes the kit useless.
 Each shippable state of the slice gets a tag. Use semantic versioning
 inside-the-persona scope:
 
-- `v0.1.0` — first shippable slice for primary persona
-- `v0.1.1` — bug fix or small ratchet improvement, primary persona
+- `v0.1.0` -- first shippable slice for primary persona
+- `v0.1.1` -- bug fix or small ratchet improvement, primary persona
   still primary
-- `v0.2.0` — second persona's primary workflow added
-- `v1.0.0` — the user explicitly declares "this is the product"
+- `v0.2.0` -- second persona's primary workflow added
+- `v1.0.0` -- the user explicitly declares "this is the product"
 
 Don't ship `v0.1.0` until the primary persona's success criterion is
-🟢. Don't ship `v0.2.0` until the secondary persona's primary
-workflow is 🟢.
+[OK]. Don't ship `v0.2.0` until the secondary persona's primary
+workflow is [OK].
 
 ## Branching strategy
 
@@ -149,26 +149,26 @@ If you're about to push or open a PR:
 - [ ] The latest `runs/` file shows the workflow currently passes.
 - [ ] `gap-log.md` reflects the current state.
 - [ ] The PR description (or push message) summarizes which personas
-      are now 🟢, 🟡, 🔴 against their primary criteria.
+      are now [OK], [WARN], [FAIL] against their primary criteria.
 
 ## "Done" for v0.1.0
 
 A v0.1.0 ships when:
 
-- The primary persona's `mvp-spec.md` success criterion is 🟢.
+- The primary persona's `mvp-spec.md` success criterion is [OK].
 - Every "OUT of v0.1" item in the spec is verified still out (no
   scope creep).
 - The latest `runs/` file demonstrates the criterion met.
-- `gap-log.md` either has all primary-persona gaps 🟢 or has them
-  marked ⚫ "deferred per user decision."
+- `gap-log.md` either has all primary-persona gaps [OK] or has them
+  marked [X] "deferred per user decision."
 
 Tag with `git tag v0.1.0`. Push the tag.
 
 ## Read next
 
-- [`templates/commit-message.md`](../templates/commit-message.md) —
+- [`templates/commit-message.md`](../templates/commit-message.md) --
   the commit-message template
-- [`templates/gap-log.md`](../templates/gap-log.md) — the gap-log
+- [`templates/gap-log.md`](../templates/gap-log.md) -- the gap-log
   template
-- [`ANTI-PATTERNS.md`](ANTI-PATTERNS.md) — the things that violate
+- [`ANTI-PATTERNS.md`](ANTI-PATTERNS.md) -- the things that violate
   this discipline

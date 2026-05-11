@@ -23,12 +23,12 @@ Steps:
    > `post == pre` for every iteration. Why?
    >
    > **Why 3:** Because `retrieval_cost(store, suite)` is implemented
-   > as `sum(span.text length) / len(suite)` — a property of the
+   > as `sum(span.text length) / len(suite)` -- a property of the
    > store. Mutations don't change the store, so the metric is
    > constant.
 
 3. Identify the SHAPE of the fix at the deepest layer. Not a one-line
-   patch — the structural change that makes the gap go away.
+   patch -- the structural change that makes the gap go away.
 
 4. Check for stacked bugs. After the deepest fix, what's the next
    thing that would block the persona's criterion? Sometimes 1 fix
@@ -52,7 +52,7 @@ Steps:
 6. After confirmation, fix the deepest cause first. Re-run the
    workflow. If a stacked bug surfaces, repeat the trace for it.
 
-7. Once the persona's gap is concretely 🟢 in a fresh `runs/` file,
+7. Once the persona's gap is concretely [OK] in a fresh `runs/` file,
    commit per `templates/commit-message.md` (persona named, root
    cause traced, verification quoted).
 

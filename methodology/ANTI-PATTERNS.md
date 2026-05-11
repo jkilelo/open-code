@@ -1,7 +1,7 @@
 # Anti-patterns
 
 Things this kit explicitly forbids. When you feel the urge to do any
-of these, refuse — or ask the user before proceeding.
+of these, refuse -- or ask the user before proceeding.
 
 ## Process anti-patterns
 
@@ -62,7 +62,7 @@ others come when a different persona's workflow demands them.
 ### Defensive programming for cases that can't happen
 
 ```python
-# ❌ This pattern hides bugs
+# [FAIL] This pattern hides bugs
 def add_node(node):
     if node is None:
         return
@@ -80,7 +80,7 @@ the diagnostic.
 ### Try-except returning defaults
 
 ```python
-# ❌ Silently swallows the real failure
+# [FAIL] Silently swallows the real failure
 def get_brief(entity):
     try:
         return generate_brief(entity)
@@ -107,7 +107,7 @@ Unacceptable: a "running" build that has mocks behind the curtain.
 ### Writing wrappers around stable libraries "for flexibility"
 
 ```python
-# ❌ Wrapping httpx because "what if we change HTTP libraries?"
+# [FAIL] Wrapping httpx because "what if we change HTTP libraries?"
 class HttpClient:
     def __init__(self): self._inner = httpx.Client()
     def get(self, url): return self._inner.get(url)
@@ -120,7 +120,7 @@ hides httpx's actual capabilities. Use httpx directly.
 ### Creating abstractions for one implementation
 
 ```python
-# ❌ One backend wrapped behind a Protocol
+# [FAIL] One backend wrapped behind a Protocol
 class StorageBackend(Protocol):
     def save(self, key: str, value: str) -> None: ...
     def load(self, key: str) -> str | None: ...
@@ -131,13 +131,13 @@ class SqliteStorage(StorageBackend):  # only impl
 
 Protocols and ABCs are earned by the SECOND implementation. Until
 then, just have `SqliteStorage`. When the second backend lands,
-extract the Protocol from the two concrete classes — not the other
+extract the Protocol from the two concrete classes -- not the other
 way around.
 
 ### Catching `Exception` at the top of the workflow
 
 ```python
-# ❌ Hides every bug under one diagnostic
+# [FAIL] Hides every bug under one diagnostic
 try:
     result = run_workflow(input)
 except Exception as exc:
@@ -161,7 +161,7 @@ demands it.
 
 ### Adding observability before there's anyone to observe
 
-Datadog, OpenTelemetry, structured logs, dashboards — all earn their
+Datadog, OpenTelemetry, structured logs, dashboards -- all earn their
 place when the persona (or operations team) is reading them. Until
 then, `print()` to stdout is fine.
 
@@ -177,13 +177,13 @@ runs end-to-end as the persona.
 
 `mvp-spec.md` is the architecture for v0.1. If you find yourself
 writing `docs/architecture/00-overview.md`, `docs/architecture/01-
-data-flow.md`, etc., for a slice that doesn't yet ship — stop.
+data-flow.md`, etc., for a slice that doesn't yet ship -- stop.
 Architecture docs are an output of v1.0, not v0.1.
 
 ### Inline comments explaining what code does
 
 ```python
-# ❌ Reads what's already obvious
+# [FAIL] Reads what's already obvious
 # Increment counter by 1
 counter += 1
 ```
@@ -202,9 +202,9 @@ Stop. The persona drives the architecture, not the other way.
 
 ### Vague personas
 
-> ❌ "Power user who needs analytics."
-> ❌ "Anyone who wants to track their projects."
-> ❌ "A developer."
+> [FAIL] "Power user who needs analytics."
+> [FAIL] "Anyone who wants to track their projects."
+> [FAIL] "A developer."
 
 If the persona could be anyone, it constrains nothing. Re-do the
 extraction with the questions in `01-PERSONAS.md`.
@@ -212,7 +212,7 @@ extraction with the questions in `01-PERSONAS.md`.
 ### Multiple primary personas in v0.1
 
 Only one persona's workflow ships first. Listing 3 primary personas
-means none of them gets a slice that actually serves them — every
+means none of them gets a slice that actually serves them -- every
 build choice is a compromise.
 
 ### Persona drift mid-build
@@ -239,7 +239,7 @@ that makes this method work.
 ### Saying "done" when it isn't
 
 The brutal review tells you when v0.1 is done. If the latest `runs/`
-file has 🔴 against the persona's criterion, the slice is not done.
+file has [FAIL] against the persona's criterion, the slice is not done.
 Don't claim it is.
 
 ### Squashing diagnostic info out of commits

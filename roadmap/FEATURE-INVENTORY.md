@@ -15,49 +15,49 @@
 
 ---
 
-## Current state (v0.4.0) — features already in open-code
+## Current state (v0.4.0) -- features already in open-code
 
-These are 🟢 done. They're listed here so the gap analysis is honest
+These are [OK] done. They're listed here so the gap analysis is honest
 and to define the baseline that each new feature builds on.
 
 | Area | Current | Source pattern |
 |------|---------|----------------|
-| 4 tools (read_file, write_file, list_dir, run_shell) | 🟢 | Claude Code core |
-| File-per-session JSONL storage at `~/.open-code/projects/<encoded-cwd>/<uuid>.jsonl` | 🟢 | Claude Code transcripts |
-| Append-only event log (`session`/`msg`/`metrics`/`fallback`/`refusal`/`end`) | 🟢 | Claude Code |
-| UUID session IDs | 🟢 | Claude Code |
-| Encoded-CWD directory layout | 🟢 | Claude Code |
-| `--resume` (most recent in CWD), `--resume-id <uuid>` | 🟢 | Claude Code `--continue` / `--resume` |
-| `--list-sessions`, `--list-sessions-all` | 🟢 | Claude Code |
-| Resume cap (`--resume-max-messages`, default 80) | 🟢 | open-code-original |
-| Cumulative metrics across resume chains | 🟢 | open-code-original |
-| Model fallback chain (preview → GA → older GA) | 🟢 | open-code-original |
-| Migration from older session storage | 🟢 | open-code-original (v0.2→v0.3) |
-| Streaming output via `generate_content_stream` | 🟢 | Claude Code |
-| Path sandbox (refuses writes outside CWD) + `--allow-outside-cwd` | 🟡 partial | Claude Code permissions (lighter) |
-| Destructive-command denylist (30 patterns, token-aware) + `--allow-dangerous` | 🟡 partial | Claude Code Bash guards |
-| `OPEN_CODE.md` project context (walks up ancestors, capped 50KB) | 🟡 partial | Claude Code `CLAUDE.md` |
-| `@-file` references in prompts (dedup, trailing punct, subdirs, 200KB cap) | 🟡 partial | Claude Code `@file` |
-| REPL mode with 8 slash commands (`/help /exit /clear /sessions /switch /cost /model /dump`) | 🟡 partial | Claude Code REPL |
-| Audit trail (tool refusals + model fallbacks as JSONL events) | 🟢 | open-code-original |
-| Cross-platform (Windows, WSL Linux verified) | 🟢 | open-code-original |
-| OS-LF normalization via `.gitattributes` | 🟢 | open-code-original |
-| Test suite: 54-assertion security test + 10 regression probes | 🟢 | open-code-original |
+| 4 tools (read_file, write_file, list_dir, run_shell) | [OK] | Claude Code core |
+| File-per-session JSONL storage at `~/.open-code/projects/<encoded-cwd>/<uuid>.jsonl` | [OK] | Claude Code transcripts |
+| Append-only event log (`session`/`msg`/`metrics`/`fallback`/`refusal`/`end`) | [OK] | Claude Code |
+| UUID session IDs | [OK] | Claude Code |
+| Encoded-CWD directory layout | [OK] | Claude Code |
+| `--resume` (most recent in CWD), `--resume-id <uuid>` | [OK] | Claude Code `--continue` / `--resume` |
+| `--list-sessions`, `--list-sessions-all` | [OK] | Claude Code |
+| Resume cap (`--resume-max-messages`, default 80) | [OK] | open-code-original |
+| Cumulative metrics across resume chains | [OK] | open-code-original |
+| Model fallback chain (preview -> GA -> older GA) | [OK] | open-code-original |
+| Migration from older session storage | [OK] | open-code-original (v0.2->v0.3) |
+| Streaming output via `generate_content_stream` | [OK] | Claude Code |
+| Path sandbox (refuses writes outside CWD) + `--allow-outside-cwd` | [WARN] partial | Claude Code permissions (lighter) |
+| Destructive-command denylist (30 patterns, token-aware) + `--allow-dangerous` | [WARN] partial | Claude Code Bash guards |
+| `OPEN_CODE.md` project context (walks up ancestors, capped 50KB) | [WARN] partial | Claude Code `CLAUDE.md` |
+| `@-file` references in prompts (dedup, trailing punct, subdirs, 200KB cap) | [WARN] partial | Claude Code `@file` |
+| REPL mode with 8 slash commands (`/help /exit /clear /sessions /switch /cost /model /dump`) | [WARN] partial | Claude Code REPL |
+| Audit trail (tool refusals + model fallbacks as JSONL events) | [OK] | open-code-original |
+| Cross-platform (Windows, WSL Linux verified) | [OK] | open-code-original |
+| OS-LF normalization via `.gitattributes` | [OK] | open-code-original |
+| Test suite: 54-assertion security test + 10 regression probes | [OK] | open-code-original |
 
 ---
 
-## Missing features — prioritized roadmap
+## Missing features -- prioritized roadmap
 
 Each entry is one row in the roadmap. The PROMPT-PACK.md has a
 copy-paste prompt per row, indexed by the same number.
 
 Legend:
 - **Impact:** how much this changes Jeff's daily workflow.
-- **Complexity:** S (≤100 LOC), M (100-300 LOC), L (>300 LOC).
+- **Complexity:** S (<=100 LOC), M (100-300 LOC), L (>300 LOC).
 - **Tier:** T1 (next 3-5 releases), T2 (mid-priority), T3 (advanced/polish).
 - **Source:** which tool/project the pattern comes from.
 
-### Tier 1 — Foundation extensibility (ship before T2)
+### Tier 1 -- Foundation extensibility (ship before T2)
 
 | # | Feature | Source | Impact | Complexity | One-line summary |
 |---|---------|--------|--------|------------|------------------|
@@ -72,7 +72,7 @@ Legend:
 | 9 | **Architect/editor model split** | Aider | high | S | A reasoning model writes a plan; a cheap "editor" model converts it to actual edits. Pair Gemini 3 Pro + Flash for ~5x cost reduction with no quality drop. |
 | 10 | **MCP server support (stdio transport)** | Claude Code / industry | high | L | Connect to Model Context Protocol servers; auto-discover their tools; multiplex into the agent's TOOL_DECLARATIONS. |
 
-### Tier 2 — Robustness + UX power-ups
+### Tier 2 -- Robustness + UX power-ups
 
 | # | Feature | Source | Impact | Complexity | One-line summary |
 |---|---------|--------|--------|------------|------------------|
@@ -83,8 +83,8 @@ Legend:
 | 15 | **Effort levels** | Claude Code | medium | S | `/effort low|medium|high|xhigh` slider that maps to model + thinking-budget params; per-turn override. |
 | 16 | **Extended thinking / `ultrathink`** | Claude Code | medium | S | A flag or in-prompt token that bumps the model's thinking-budget for one turn. Gemini 3 supports an explicit `thinking_config`. |
 | 17 | **Sticky session permissions** | OpenAI Codex CLI | medium | S | Permissions chosen in one invocation persist across `--resume`; written to a `permissions` event in the JSONL. |
-| 18 | **Four-tier memory** | Gemini CLI | medium | S | `~/.open-code/OPEN_CODE.md` (global) → `./OPEN_CODE.md` (project, committed) → `./<subdir>/OPEN_CODE.md` (subdir override) → `./.open-code/MEMORY.md` (private/uncommitted), concatenated in order. |
-| 19 | **Extended @-mention context providers** | Continue | medium | S each | `@diff`, `@terminal`, `@problems`, `@folder`, `@tree`, `@open`, `@docs` — each yields tokens via a small adapter. |
+| 18 | **Four-tier memory** | Gemini CLI | medium | S | `~/.open-code/OPEN_CODE.md` (global) -> `./OPEN_CODE.md` (project, committed) -> `./<subdir>/OPEN_CODE.md` (subdir override) -> `./.open-code/MEMORY.md` (private/uncommitted), concatenated in order. |
+| 19 | **Extended @-mention context providers** | Continue | medium | S each | `@diff`, `@terminal`, `@problems`, `@folder`, `@tree`, `@open`, `@docs` -- each yields tokens via a small adapter. |
 | 20 | **Non-interactive `--print` + JSON stream output** | Codex CLI / Claude Code `--output-format stream-json` | medium | M | Headless mode: emit one JSON object per event (`tool_call`, `assistant_message`, `apply_patch`, `cost`) to stdout. Pipe-friendly. |
 | 21 | **Skill prompt caching (1h)** | Claude Code | medium | S | If the model supports prompt caching, mark the SYSTEM_INSTRUCTION + skills + OPEN_CODE.md as a cacheable prefix to cut latency/cost on repeated turns. |
 | 22 | **Plugin system + marketplace** | Claude Code | medium | L | `.open-code-plugin/plugin.json` manifest bundling skills, agents, hooks, MCP configs, denylist patches. Namespaced (`plugin:skill`). `--plugin-dir` / `--plugin-url`. |
@@ -92,7 +92,7 @@ Legend:
 | 24 | **`/loop` and `/schedule`** | Claude Code | medium | M | `/loop` re-runs a task on an interval; `/schedule` registers a cron-style background agent that fires later. Output goes to the session's JSONL. |
 | 25 | **Managed settings enforcement** | Claude Code | low-med | M | Org-level policy file at a fixed path that locks down hooks/MCP/permissions and cannot be overridden by user settings. |
 
-### Tier 3 — Advanced / polish
+### Tier 3 -- Advanced / polish
 
 | # | Feature | Source | Impact | Complexity | One-line summary |
 |---|---------|--------|--------|------------|------------------|
@@ -108,34 +108,34 @@ Legend:
 | 35 | **Auto-select edit format per model** | Aider | low-med | M | Benchmark each supported model's "laziness" with `whole` / `diff` / `udiff` / `apply_patch` formats; pick the least-lazy one per session. |
 | 36 | **Vim visual modes in REPL** | Claude Code | low | S | `v` and `V` modes inside the REPL prompt for bulk selection of past turns / sections. |
 | 37 | **PowerShell tool on Windows** | Claude Code | low | S | When `OPEN_CODE_USE_POWERSHELL=1`, route `run_shell` through `pwsh` instead of `cmd`. |
-| 38 | **Native CLI binary** | Claude Code | low | L | PyInstaller / Nuitka build that ships a single executable; faster cold start than `python …`. |
+| 38 | **Native CLI binary** | Claude Code | low | L | PyInstaller / Nuitka build that ships a single executable; faster cold start than `python ...`. |
 
 ---
 
 ## Summary by tier
 
-- **Tier 1:** 10 features. The "core clone" — hooks, settings, skills,
+- **Tier 1:** 10 features. The "core clone" -- hooks, settings, skills,
   subagents, permission modes, plan/act, repo-map, apply_patch,
   architect/editor split, MCP. ~3-4 releases of work.
 - **Tier 2:** 15 features. Robustness + ergonomics. ~3-5 releases.
 - **Tier 3:** 13 features. Advanced surface area. As-needed.
 
 Total: 38 missing features. Adding them all probably produces a
-~5000-7000 LOC codebase across 8-12 modules — comparable to Aider's
+~5000-7000 LOC codebase across 8-12 modules -- comparable to Aider's
 size, smaller than Claude Code's runtime.
 
 ---
 
-## Implementation order — recommended
+## Implementation order -- recommended
 
 If forced to pick 5 to ship first across both tiers for maximum
 impact-per-LOC:
 
-1. **#1 Hooks** — unlocks 80% of extensibility surface in one feature
-2. **#7 Repo-map** — single biggest "agent makes less wrong-file edits" win
-3. **#3 Skills** — every team has a workflow they'd codify
-4. **#6 Plan/Act** — paired with #9 below, halves cost on multi-file tasks
-5. **#8 V4A apply_patch** — replaces the awkward read/write/edit triad
+1. **#1 Hooks** -- unlocks 80% of extensibility surface in one feature
+2. **#7 Repo-map** -- single biggest "agent makes less wrong-file edits" win
+3. **#3 Skills** -- every team has a workflow they'd codify
+4. **#6 Plan/Act** -- paired with #9 below, halves cost on multi-file tasks
+5. **#8 V4A apply_patch** -- replaces the awkward read/write/edit triad
 
 Honest framing: shipping just these five takes open-code from
 "Claude-Code-flavored REPL with cost reporting" to "credible Claude
@@ -160,12 +160,12 @@ Code competitor for indie devs on Gemini."
 - https://code.claude.com/docs/en/whats-new
 
 ### Variants
-- Aider: https://aider.chat/docs/repomap.html · https://aider.chat/2024/09/26/architect.html · https://aider.chat/docs/more/edit-formats.html · https://aider.chat/docs/usage/modes.html
-- Codex CLI: https://github.com/openai/codex/blob/main/codex-rs/apply-patch/apply_patch_tool_instructions.md · https://developers.openai.com/codex/concepts/sandboxing · https://developers.openai.com/codex/cli/reference
-- Cline: https://docs.cline.bot/features/checkpoints · https://cline.bot/blog/plan-smarter-code-faster-clines-plan-act-is-the-paradigm-for-agentic-coding · https://docs.cline.bot/exploring-clines-tools/remote-browser-support
-- Gemini CLI: https://geminicli.com/docs/cli/checkpointing/ · https://github.com/google-gemini/gemini-cli/discussions/26216
+- Aider: https://aider.chat/docs/repomap.html . https://aider.chat/2024/09/26/architect.html . https://aider.chat/docs/more/edit-formats.html . https://aider.chat/docs/usage/modes.html
+- Codex CLI: https://github.com/openai/codex/blob/main/codex-rs/apply-patch/apply_patch_tool_instructions.md . https://developers.openai.com/codex/concepts/sandboxing . https://developers.openai.com/codex/cli/reference
+- Cline: https://docs.cline.bot/features/checkpoints . https://cline.bot/blog/plan-smarter-code-faster-clines-plan-act-is-the-paradigm-for-agentic-coding . https://docs.cline.bot/exploring-clines-tools/remote-browser-support
+- Gemini CLI: https://geminicli.com/docs/cli/checkpointing/ . https://github.com/google-gemini/gemini-cli/discussions/26216
 - Continue: https://docs.continue.dev/customize/deep-dives/custom-providers
-- Cursor: https://cursor.com/changelog/2-4 · https://cursor.com/docs/subagents · https://cursor.com/changelog/sdk-release
+- Cursor: https://cursor.com/changelog/2-4 . https://cursor.com/docs/subagents . https://cursor.com/changelog/sdk-release
 - Windsurf: https://cognition.ai/blog/codemaps
 - Crush: https://github.com/charmbracelet/crush
 - Sourcegraph Amp: https://sourcegraph.com/amp

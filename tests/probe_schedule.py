@@ -44,7 +44,7 @@ assert stats.iterations == 3
 assert calls == [1, 2, 3]
 # Sleep between iters: we sleep AFTER each iter except the last one
 # that's about to hit the cap. With max=3 and the cap-check after sleep,
-# the implementation sleeps 2 times (between 1→2 and 2→3).
+# the implementation sleeps 2 times (between 1->2 and 2->3).
 assert len(sleeps) == 2, f"expected 2 sleeps; got {len(sleeps)}: {sleeps}"
 assert all(s == 0.5 for s in sleeps)
 assert not stats.interrupted

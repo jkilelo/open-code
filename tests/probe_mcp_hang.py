@@ -1,7 +1,7 @@
 """Probe: an MCP server that never responds hangs the agent loop forever.
 
 We spawn a tiny Python "server" that reads stdin and never writes
-stdout. The MCPClient._call should time out — but it doesn't, because
+stdout. The MCPClient._call should time out -- but it doesn't, because
 CALL_TIMEOUT_SECS is defined but never used.
 
 Verification: we run call_tool() in a thread with a 5-second join.
@@ -31,7 +31,7 @@ resp = {"jsonrpc": "2.0", "id": req["id"],
 sys.stdout.write(json.dumps(resp) + "\\n"); sys.stdout.flush()
 # Drain notifications/initialized
 sys.stdin.readline()
-# tools/list — give one tool
+# tools/list -- give one tool
 line = sys.stdin.readline()
 req = json.loads(line)
 resp = {"jsonrpc": "2.0", "id": req["id"],
@@ -54,7 +54,7 @@ client.start_servers({"silent": {"command": sys.executable, "args": [str(server_
 print(f"servers: {list(client.servers.keys())}")
 print(f"tools: {[t['name'] for s in client.servers.values() for t in s.tools]}")
 
-# Now call_tool — should it hang?
+# Now call_tool -- should it hang?
 hang_done = threading.Event()
 hang_result = []
 

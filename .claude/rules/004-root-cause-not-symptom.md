@@ -7,7 +7,7 @@ paths:
 # Root-cause fixes, not symptom bandages
 
 You are editing build code. If you're about to add error handling,
-catch a specific exception, or wrap something in a fallback —
+catch a specific exception, or wrap something in a fallback --
 **stop and trace 3-deep first**.
 
 ## The trace-three-deep rule
@@ -23,13 +23,13 @@ made, makes the whole CLASS of "this kind of failure" go away.
 
 ## Refuse these bandages
 
-- **`try: ... except: return default`** — hides the upstream bug
-- **Feature flags hiding broken behavior** — defers without solving
-- **Retries with no understanding of why failures happen** — masks
+- **`try: ... except: return default`** -- hides the upstream bug
+- **Feature flags hiding broken behavior** -- defers without solving
+- **Retries with no understanding of why failures happen** -- masks
   intermittent bugs from the user
-- **`if x is None: x = default` scattered through call sites** —
+- **`if x is None: x = default` scattered through call sites** --
   the upstream bug is somewhere else; find it
-- **Writing a test that pins the buggy behavior** — locks the bug in
+- **Writing a test that pins the buggy behavior** -- locks the bug in
 
 ## When to fix at layer N vs N+1
 

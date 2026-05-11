@@ -1,17 +1,17 @@
 # Personas
 
 > Fill out this file before writing any code. The first persona is
-> "primary" — v0.1 ships their workflow. Additional personas are
+> "primary" -- v0.1 ships their workflow. Additional personas are
 > backlog (v0.2+).
 >
 > A useful persona is a CONSTRAINT, not a wish. Specific name, specific
-> daily pain, specific success criterion — see methodology/01-PERSONAS.md.
+> daily pain, specific success criterion -- see methodology/01-PERSONAS.md.
 
 ---
 
-## Primary persona — v0.1 ships this workflow
+## Primary persona -- v0.1 ships this workflow
 
-### [Name] — [Job title], [Organization]
+### [Name] -- [Job title], [Organization]
 
 **Daily pain (current workflow):**
 
@@ -58,18 +58,18 @@
 
 ---
 
-## Secondary persona — v0.2 candidate
+## Secondary persona -- v0.2 candidate
 
-### [Name] — [Job title], [Organization]
+### [Name] -- [Job title], [Organization]
 
 [Same fields as above. Will not be served by v0.1; add to v0.2 only
-when primary persona's criterion is concretely 🟢.]
+when primary persona's criterion is concretely [OK].]
 
 ---
 
-## Tertiary persona — v0.3+ backlog
+## Tertiary persona -- v0.3+ backlog
 
-### [Name] — [Job title], [Organization]
+### [Name] -- [Job title], [Organization]
 
 [Same fields. Backlog.]
 
@@ -77,7 +77,7 @@ when primary persona's criterion is concretely 🟢.]
 
 ## Notes
 
-- If two personas have the same workflow, MERGE them — one persona is
+- If two personas have the same workflow, MERGE them -- one persona is
   enough.
 - If two personas have different workflows, only ONE workflow ships in
   v0.1. The other waits.

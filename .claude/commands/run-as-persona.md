@@ -11,9 +11,9 @@ Pre-conditions:
 
 Steps:
 
-1. Read `mvp-spec.md` § "How v0.1 is verified." That's your script.
+1. Read `mvp-spec.md` Sec. "How v0.1 is verified." That's your script.
 
-2. Read `personas.md` § Primary. Quote the success criterion verbatim.
+2. Read `personas.md` Sec. Primary. Quote the success criterion verbatim.
 
 3. Execute the script. Real systems only:
    - Real LLM API key (load `.env`)
@@ -40,20 +40,20 @@ Steps:
       sentence explanation.
 
 6. Color-code each criterion in `mvp-spec.md`:
-   - 🟢 met (quote the satisfying output)
-   - 🟡 partial (specify the gap)
-   - 🔴 failed (name what's broken)
-   - ⚫ N/A (confirm still OUT)
+   - [OK] met (quote the satisfying output)
+   - [WARN] partial (specify the gap)
+   - [FAIL] failed (name what's broken)
+   - [X] N/A (confirm still OUT)
 
 7. Tell the user the verdict and the next step:
-   - All 🟢 + ⚫ → "v0.1.0 is shippable. Want me to tag?"
-   - Any 🟡 or 🔴 → "Not shippable. Top blocker: [...]. Want me to fix?"
+   - All [OK] + [X] -> "v0.1.0 is shippable. Want me to tag?"
+   - Any [WARN] or [FAIL] -> "Not shippable. Top blocker: [...]. Want me to fix?"
 
 If you can't run the workflow without developer intervention, that's
-a 🔴. Don't fudge.
+a [FAIL]. Don't fudge.
 
 If the workflow runs but the output is "good enough but not actually
-better than the persona's current workflow," that's a 🟡.
+better than the persona's current workflow," that's a [WARN].
 "Outperforms human" is the bar.
 
 Reference: `methodology/04-RUN-THE-WORKFLOW.md` and

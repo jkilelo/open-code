@@ -1,8 +1,8 @@
-# MVP spec — v0.1
+# MVP spec -- v0.1
 
 > Fill out this file before writing any code. The four sections below
 > are the entire spec. If you find yourself adding more sections,
-> stop — you're scope-creeping.
+> stop -- you're scope-creeping.
 
 ---
 
@@ -11,7 +11,7 @@
 > Single name from `personas.md`. v0.1 serves THIS persona's primary
 > workflow. Other personas wait for v0.2+.
 
-**[Persona name]** — see `personas.md` § Primary.
+**[Persona name]** -- see `personas.md` Sec. Primary.
 
 ---
 
@@ -42,9 +42,9 @@
 > Each piece justified per-persona. See `skills/minimal-stack-selection/`
 > for the default ladder.
 
-- **[Technology X]** — needed because [persona] needs [specific
+- **[Technology X]** -- needed because [persona] needs [specific
   workflow detail]. Smallest viable choice for that need.
-- **[Technology Y]** — needed because [...]. Could alternatively use
+- **[Technology Y]** -- needed because [...]. Could alternatively use
   [smaller alternative]; chosen Y because [persona-relevant reason].
 - ...
 
@@ -55,9 +55,9 @@
 > Be explicit. Each item has a one-line reason. The list is a
 > permission slip to say "no" later when scope creep arrives.
 
-- **[Item 1]** — [reason it's out, e.g. "persona is sole user"]
-- **[Item 2]** — [reason]
-- **[Item 3]** — [reason]
+- **[Item 1]** -- [reason it's out, e.g. "persona is sole user"]
+- **[Item 2]** -- [reason]
+- **[Item 3]** -- [reason]
 
 Common items that go OUT of v0.1:
 - Authentication / authorization

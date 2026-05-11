@@ -5,7 +5,7 @@
 - apply_patch wiring
 - subagents discovery
 
-We're not running the model — we exercise the SUPPORTING infrastructure
+We're not running the model -- we exercise the SUPPORTING infrastructure
 in the same temp project to verify all five feature modules cooperate
 without surprising interaction.
 """

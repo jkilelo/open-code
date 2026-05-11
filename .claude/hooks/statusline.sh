@@ -6,12 +6,12 @@
 # of the kit's enforcement state to stdout.
 #
 # What it shows:
-#   [persona-mvp-kit]  P? S? R?  gap-log: N🔴 K🟢  | branch: main
+#   [persona-mvp-kit]  P? S? R?  gap-log: N[FAIL] K[OK]  | branch: main
 #
-# - P? : ✓ if personas.md exists; ✗ otherwise
-# - S? : ✓ if mvp-spec.md exists; ✗ otherwise
-# - R? : N (count of runs/ files) or "—" if no runs/
-# - gap-log: count of 🔴 open and 🟢 closed
+# - P? : [OK] if personas.md exists; [X] otherwise
+# - S? : [OK] if mvp-spec.md exists; [X] otherwise
+# - R? : N (count of runs/ files) or "--" if no runs/
+# - gap-log: count of [FAIL] open and [OK] closed
 # - branch: current git branch
 #
 # Color codes used minimally; status line should be fast and visible.
@@ -24,22 +24,22 @@ PROJECT_DIR=$(echo "$INPUT" | jq -r '.cwd // empty')
 
 # Persona/spec presence (one char each).
 if [[ -s "$PROJECT_DIR/personas.md" ]]; then
-  P="✓"
+  P="[OK]"
 else
-  P="✗"
+  P="[X]"
 fi
 
 if [[ -s "$PROJECT_DIR/mvp-spec.md" ]]; then
-  S="✓"
+  S="[OK]"
 else
-  S="✗"
+  S="[X]"
 fi
 
 # Runs count.
 if [[ -d "$PROJECT_DIR/runs" ]]; then
   R=$(ls -1 "$PROJECT_DIR/runs"/*.md 2>/dev/null | wc -l | tr -d ' ')
 else
-  R="—"
+  R="--"
 fi
 
 # Gap-log counts.
@@ -47,27 +47,27 @@ fi
 # because grep's regex engine fails to match multi-byte UTF-8 emoji on
 # some platforms (notably Git Bash / msys2 on Windows). index() is
 # byte-substring and works everywhere.
-# Counts 🔴 OPEN, 🟡 IN-PROGRESS, 🟢 CLOSED. Omits 🟡 from the display when zero.
+# Counts [FAIL] OPEN, [WARN] IN-PROGRESS, [OK] CLOSED. Omits [WARN] from the display when zero.
 if [[ -s "$PROJECT_DIR/gap-log.md" ]]; then
-  RED=$(awk 'BEGIN{c=0} {if (index($0,"🔴")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
-  YELLOW=$(awk 'BEGIN{c=0} {if (index($0,"🟡")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
-  GREEN=$(awk 'BEGIN{c=0} {if (index($0,"🟢")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
+  RED=$(awk 'BEGIN{c=0} {if (index($0,"[FAIL]")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
+  YELLOW=$(awk 'BEGIN{c=0} {if (index($0,"[WARN]")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
+  GREEN=$(awk 'BEGIN{c=0} {if (index($0,"[OK]")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
   if [[ "$YELLOW" -gt 0 ]]; then
-    GAP="${RED}🔴 ${YELLOW}🟡 ${GREEN}🟢"
+    GAP="${RED}[FAIL] ${YELLOW}[WARN] ${GREEN}[OK]"
   else
-    GAP="${RED}🔴 ${GREEN}🟢"
+    GAP="${RED}[FAIL] ${GREEN}[OK]"
   fi
 else
-  GAP="—"
+  GAP="--"
 fi
 
 # Git branch.
 # `git rev-parse --abbrev-ref HEAD` in a no-commit repo prints "HEAD"
-# to stdout AND exits 128 — the OR fallback then ALSO prints, producing
+# to stdout AND exits 128 -- the OR fallback then ALSO prints, producing
 # garbled output. `git symbolic-ref --short HEAD` exits cleanly with
 # the branch name even before the first commit.
 BRANCH=$(cd "$PROJECT_DIR" 2>/dev/null && git symbolic-ref --short HEAD 2>/dev/null)
-[[ -z "$BRANCH" ]] && BRANCH="—"
+[[ -z "$BRANCH" ]] && BRANCH="--"
 
 # Context-fill percent (if hook input includes it).
 CTX_PCT=$(echo "$INPUT" | jq -r '.context_used_percent // empty' 2>/dev/null || echo "")

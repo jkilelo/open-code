@@ -26,7 +26,7 @@ try:
         print(f"  Result: ok={r.get('ok')} err={r.get('error','-')[:80]}")
         print(f"  Escape file written outside CWD: {target.exists()}")
         if target.exists():
-            print("  >>> SYMLINK ESCAPE WORKED — sandbox bypass")
+            print("  >>> SYMLINK ESCAPE WORKED -- sandbox bypass")
 finally:
     shutil.rmtree(sb, ignore_errors=True)
     shutil.rmtree(out, ignore_errors=True)

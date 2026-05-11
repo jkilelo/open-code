@@ -1,4 +1,4 @@
-# 01 — Personas
+# 01 -- Personas
 
 A useful persona is **a constraint, not a wish**.
 
@@ -10,13 +10,13 @@ filled with concrete specifics:
 ### 1. Name + role + organization
 
 A real-sounding name (so you stop calling them "the user"), a specific
-job title, and the type of organization. Specificity matters — a "data
+job title, and the type of organization. Specificity matters -- a "data
 scientist" is different from a "data scientist at Citi Risk Analytics"
 because the latter constraints what data they touch and what their
 boss expects.
 
-> ❌ "Power user who runs reports"
-> ✅ "Sarah Chen, Senior Data Scientist, Citi Risk Analytics, NYC office"
+> [FAIL] "Power user who runs reports"
+> [OK] "Sarah Chen, Senior Data Scientist, Citi Risk Analytics, NYC office"
 
 ### 2. Daily pain (current workflow)
 
@@ -24,8 +24,8 @@ What does this person do RIGHT NOW that's painful? Be precise: how
 many minutes/hours per day, how often does it fail, what does the
 failure cost them?
 
-> ❌ "Spends a lot of time on research"
-> ✅ "Reads ~200 fintech news articles between 7am-9am every weekday,
+> [FAIL] "Spends a lot of time on research"
+> [OK] "Reads ~200 fintech news articles between 7am-9am every weekday,
 >     manually cross-references claims across Reuters / FT / SEC
 >     filings, types notes into Word, updates Excel counterparty
 >     tracker, emails brief to credit committee by 9:30. Takes
@@ -42,18 +42,18 @@ The single workflow the v0.1 ships. Pick the workflow that:
 
 If you can't pick one, your persona is fuzzy. Sharpen it.
 
-> ❌ "Build risk reports"
-> ✅ "Given 4-10 articles about a single counterparty, produce a
+> [FAIL] "Build risk reports"
+> [OK] "Given 4-10 articles about a single counterparty, produce a
 >     5-bullet brief with citations and an explicit list of
 >     contradictions across the sources."
 
 ### 4. Success criterion (the "outperforms human" bar)
 
 Concrete, measurable, **statable in the persona's own language**.
-Not "the test passes" — what does the persona consider winning?
+Not "the test passes" -- what does the persona consider winning?
 
-> ❌ "Better recall"
-> ✅ "Brief is produced in <30 seconds (vs 30-45 min manual). Catches
+> [FAIL] "Better recall"
+> [OK] "Brief is produced in <30 seconds (vs 30-45 min manual). Catches
 >     at least one cross-source contradiction the human would have
 >     missed. Every claim has a span citation traceable to source
 >     URL. Briefs are ready before her 9:30am committee email goes
@@ -68,8 +68,8 @@ the criterion is too vague.
 The mirror of the criterion. What outputs would make this persona
 NOT use your tool?
 
-> ❌ "If it's broken"
-> ✅ "If it ever fabricates a citation. If the brief misses a
+> [FAIL] "If it's broken"
+> [OK] "If it ever fabricates a citation. If the brief misses a
 >     contradiction that's literally in the source text. If it takes
 >     longer than her current manual process. If she can't trace any
 >     claim back to a verifiable source URL."
@@ -85,7 +85,7 @@ You DON'T have personas. You have a tech stack and a domain. You need
 to ask up to 4 questions before writing code:
 
 1. **Who's running the agents?** Marketing analyst? Internal devops?
-   End customers? Different answers ⇒ totally different apps.
+   End customers? Different answers => totally different apps.
 
 2. **What does ONE agent do, in their words?** "Summarize 10 articles"
    is different from "draft a sales email" is different from "scan
@@ -113,21 +113,21 @@ backlog.
 
 ## Primary (v0.1 ships their workflow)
 
-### 1. Sarah Chen — Senior Data Scientist, Citi Risk Analytics
+### 1. Sarah Chen -- Senior Data Scientist, Citi Risk Analytics
 [full template]
 
 ## Secondary (v0.2+)
 
-### 2. Maya Patel — Clinical Pharmacist, Mass General
+### 2. Maya Patel -- Clinical Pharmacist, Mass General
 [full template]
 
 ## Tertiary (later)
 
-### 3. Alex Rivera — OSS Maintainer (PyPA)
+### 3. Alex Rivera -- OSS Maintainer (PyPA)
 [full template]
 ```
 
-If two personas have similar workflows, MERGE them — you don't need
+If two personas have similar workflows, MERGE them -- you don't need
 both. If they have different workflows, the slice for one will not
 serve the other; pick one and ship it before adding the other.
 
@@ -167,6 +167,6 @@ stop. Ask the user.
 
 ## Read next
 
-- [`02-MVP-BAR.md`](02-MVP-BAR.md) — how to translate a persona's
+- [`02-MVP-BAR.md`](02-MVP-BAR.md) -- how to translate a persona's
   success criterion into a build bar
-- [`templates/persona.md`](../templates/persona.md) — fill-in template
+- [`templates/persona.md`](../templates/persona.md) -- fill-in template

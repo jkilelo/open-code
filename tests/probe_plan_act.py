@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory() as d:
     s = store.create("/tmp/x", "fake", "t")
     store.append_plan(s, plan_id="p1", content="plan body", model="x")
     agg = store.aggregate_metrics(s)
-    # plan events are not iter/fallback/refusal — should be zero
+    # plan events are not iter/fallback/refusal -- should be zero
     assert agg["n_iters"] == 0, f"plan should not count as iter; got {agg}"
 print("[PASS] plan events don't pollute aggregate_metrics counters")
 

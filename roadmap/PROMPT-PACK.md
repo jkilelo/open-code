@@ -29,11 +29,11 @@ including the key facts in each prompt keeps the prompt portable.
 
 ---
 
-# Tier 1 — Foundation extensibility
+# Tier 1 -- Foundation extensibility
 
 ## #1 Hooks system
 
-**Tier 1 · Impact: high · Complexity: M · Source: Claude Code**
+**Tier 1 . Impact: high . Complexity: M . Source: Claude Code**
 
 ```
 Add a hooks system to open-code modeled on Claude Code's. Goal: let
@@ -88,7 +88,7 @@ Conventions:
 
 ## #2 Settings hierarchy + permission rules
 
-**Tier 1 · Impact: high · Complexity: M · Source: Claude Code**
+**Tier 1 . Impact: high . Complexity: M . Source: Claude Code**
 
 ```
 Add layered settings + per-tool permission rules to open-code.
@@ -118,8 +118,8 @@ Implementation hints:
 - New module `settings.py` (~150 LOC) with `load_layered_settings(cwd)`.
 - CLI flags + env vars override file settings (highest precedence).
 - The four `allow/ask/deny` lists evaluated PreToolUse:
-  deny wins → ask prompts user (REPL only; one-shot defaults to deny)
-  → allow proceeds. Default policy: allow read/list, ask on
+  deny wins -> ask prompts user (REPL only; one-shot defaults to deny)
+  -> allow proceeds. Default policy: allow read/list, ask on
   write/shell.
 - Path sandbox + denylist remain as a separate hard layer underneath.
 
@@ -138,7 +138,7 @@ Conventions:
 
 ## #3 Skills system
 
-**Tier 1 · Impact: high · Complexity: M · Source: Claude Code**
+**Tier 1 . Impact: high . Complexity: M . Source: Claude Code**
 
 ```
 Add a skills system modeled on Claude Code's `.claude/skills/`.
@@ -191,7 +191,7 @@ Conventions:
 
 ## #4 Subagents / Task tool
 
-**Tier 1 · Impact: high · Complexity: L · Source: Claude Code**
+**Tier 1 . Impact: high . Complexity: L . Source: Claude Code**
 
 ```
 Add subagent delegation modeled on Claude Code's Task tool.
@@ -237,19 +237,19 @@ Conventions:
 
 ## #5 Permission modes
 
-**Tier 1 · Impact: high · Complexity: S · Source: Claude Code**
+**Tier 1 . Impact: high . Complexity: S . Source: Claude Code**
 
 ```
 Add a `--mode` flag with these values mirroring Claude Code:
 
-- `default`        — current behavior (ask in REPL, deny in one-shot)
-- `acceptEdits`    — auto-allow all write_file calls (within sandbox)
-- `plan`           — read-only: write_file and run_shell are denied
+- `default`        -- current behavior (ask in REPL, deny in one-shot)
+- `acceptEdits`    -- auto-allow all write_file calls (within sandbox)
+- `plan`           -- read-only: write_file and run_shell are denied
                     at the permissions layer; agent narrates what it
                     *would* do; output is the "plan" artifact
-- `auto`           — model-controlled; the model can request the user
+- `auto`           -- model-controlled; the model can request the user
                     elevate, otherwise it sticks to read-only
-- `bypassPermissions` — disables ALL permission checks (the existing
+- `bypassPermissions` -- disables ALL permission checks (the existing
                        --allow-outside-cwd + --allow-dangerous are
                        a subset of this)
 
@@ -258,7 +258,7 @@ Implementation hints:
   (`/mode plan`).
 - Permission check function gates each tool call: returns
   (allow|ask|deny, reason). Plan mode denies write_file/run_shell
-  with reason "plan mode — narrate only."
+  with reason "plan mode -- narrate only."
 - Plan-mode session ends by writing a `plan` event to JSONL with the
   full model text; `--apply-plan <session-id>` can later replay it
   in acceptEdits mode.
@@ -279,7 +279,7 @@ Conventions:
 
 ## #6 Plan/Act mode separation
 
-**Tier 1 · Impact: high · Complexity: S · Source: Cline**
+**Tier 1 . Impact: high . Complexity: S . Source: Cline**
 
 ```
 Build on #5 (permission modes) by adding the Cline-style Plan/Act
@@ -320,7 +320,7 @@ Conventions:
 
 ## #7 Repo-map (Aider-style symbol skeleton)
 
-**Tier 1 · Impact: high · Complexity: M · Source: Aider**
+**Tier 1 . Impact: high . Complexity: M . Source: Aider**
 
 ```
 Add an Aider-style repo-map: a compact "symbol skeleton" of the
@@ -346,7 +346,7 @@ Implementation hints:
 - New module `repomap.py` (~250 LOC).
 - Deps: `tree-sitter`, `tree-sitter-languages` (covers ~30 languages),
   `networkx`.
-- Aider's `tags.scm` queries are MIT — port directly per-language.
+- Aider's `tags.scm` queries are MIT -- port directly per-language.
 - Cache the graph on disk under
   `~/.open-code/cache/<encoded-cwd>/repomap.json`; invalidate on
   file mtime change.
@@ -372,7 +372,7 @@ Conventions:
 
 ## #8 V4A apply_patch envelope
 
-**Tier 1 · Impact: high · Complexity: M · Source: OpenAI Codex CLI**
+**Tier 1 . Impact: high . Complexity: M . Source: OpenAI Codex CLI**
 
 ```
 Replace the write_file/edit dance with a single `apply_patch` tool
@@ -416,7 +416,7 @@ Conventions:
 
 ## #9 Architect/editor model split
 
-**Tier 1 · Impact: high · Complexity: S · Source: Aider**
+**Tier 1 . Impact: high . Complexity: S . Source: Aider**
 
 ```
 Allow open-code to use two models in a single turn: an "architect"
@@ -440,7 +440,7 @@ Loop (when both are set):
 
 Implementation hints:
 - ~100 LOC of routing in run_loop or a wrapper.
-- Reuse #6's plan/act if shipped — this is essentially "auto plan +
+- Reuse #6's plan/act if shipped -- this is essentially "auto plan +
   auto act with different models."
 - If editor mid-turn needs more reasoning, it can `delegate` to the
   architect (depends on #4 subagents).
@@ -460,13 +460,13 @@ Conventions:
 
 ## #10 MCP server support
 
-**Tier 1 · Impact: high · Complexity: L · Source: Claude Code / industry standard**
+**Tier 1 . Impact: high . Complexity: L . Source: Claude Code / industry standard**
 
 ```
 Add Model Context Protocol (MCP) client support so open-code can
 connect to external tool servers.
 
-Scope (v0.5 — stdio transport only):
+Scope (v0.5 -- stdio transport only):
 - Read `mcpServers` section of settings.json (Claude Code format):
     mcpServers:
       filesystem:
@@ -506,11 +506,11 @@ Conventions:
 
 ---
 
-# Tier 2 — Robustness + UX power-ups
+# Tier 2 -- Robustness + UX power-ups
 
 ## #11 Shadow-git checkpointing
 
-**Tier 2 · Impact: high · Complexity: M · Source: Cline / Gemini CLI**
+**Tier 2 . Impact: high . Complexity: M . Source: Cline / Gemini CLI**
 
 ```
 Add per-tool-call filesystem snapshots so the agent can be reverted
@@ -551,7 +551,7 @@ Conventions:
 
 ## #12 Atomic-commit per turn
 
-**Tier 2 · Impact: medium · Complexity: S · Source: Aider**
+**Tier 2 . Impact: medium . Complexity: S . Source: Aider**
 
 ```
 Add an opt-in mode where every successful turn's file changes are
@@ -563,7 +563,7 @@ UX:
   ask the model to produce a one-line conventional-commit-style
   message describing the change.
 - Commit with that message + a kit-style attribution footer:
-    🤖 Authored by open-code (session <uuid>)
+    (bot) Authored by open-code (session <uuid>)
 
 Implementation hints:
 - ~80 LOC near the end of run_loop.
@@ -588,7 +588,7 @@ Conventions:
 
 ## #13 `/compact` slash command
 
-**Tier 2 · Impact: medium · Complexity: S · Source: Claude Code**
+**Tier 2 . Impact: medium . Complexity: S . Source: Claude Code**
 
 ```
 Add a `/compact` slash command that summarizes older session history
@@ -628,7 +628,7 @@ Conventions:
 
 ## #14 Status line
 
-**Tier 2 · Impact: medium · Complexity: S · Source: Claude Code**
+**Tier 2 . Impact: medium . Complexity: S . Source: Claude Code**
 
 ```
 Add a persistent status line at the bottom of the REPL (and below
@@ -661,7 +661,7 @@ Conventions:
 
 ## #15 Effort levels
 
-**Tier 2 · Impact: medium · Complexity: S · Source: Claude Code**
+**Tier 2 . Impact: medium . Complexity: S . Source: Claude Code**
 
 ```
 Add `--effort <low|medium|high|xhigh>` and `/effort` REPL command
@@ -695,7 +695,7 @@ Conventions:
 
 ## #16 Extended thinking / `ultrathink`
 
-**Tier 2 · Impact: medium · Complexity: S · Source: Claude Code**
+**Tier 2 . Impact: medium . Complexity: S . Source: Claude Code**
 
 ```
 Add an in-prompt marker `ultrathink` that bumps the next turn's
@@ -728,7 +728,7 @@ Conventions:
 
 ## #17 Sticky session permissions
 
-**Tier 2 · Impact: medium · Complexity: S · Source: OpenAI Codex CLI**
+**Tier 2 . Impact: medium . Complexity: S . Source: OpenAI Codex CLI**
 
 ```
 Persist per-tool permission decisions across --resume.
@@ -760,7 +760,7 @@ Conventions:
 
 ## #18 Four-tier project memory
 
-**Tier 2 · Impact: medium · Complexity: S · Source: Gemini CLI**
+**Tier 2 . Impact: medium . Complexity: S . Source: Gemini CLI**
 
 ```
 Extend OPEN_CODE.md loading from "first match wins" to four-tier
@@ -796,7 +796,7 @@ Conventions:
 
 ## #19 Extended @-mention context providers
 
-**Tier 2 · Impact: medium · Complexity: S each · Source: Continue**
+**Tier 2 . Impact: medium . Complexity: S each . Source: Continue**
 
 ```
 Extend @-file refs (#19 in v0.4) with typed providers Continue-style.
@@ -833,7 +833,7 @@ Conventions:
 
 ## #20 Non-interactive `--print` + JSON stream output
 
-**Tier 2 · Impact: medium · Complexity: M · Source: Codex CLI / Claude Code**
+**Tier 2 . Impact: medium . Complexity: M . Source: Codex CLI / Claude Code**
 
 ```
 Add `--print` (alias `-p`) flag that switches output to JSON-line
@@ -873,7 +873,7 @@ Conventions:
 
 ## #21 Prompt caching (1-hour TTL)
 
-**Tier 2 · Impact: medium · Complexity: S · Source: Claude Code**
+**Tier 2 . Impact: medium . Complexity: S . Source: Claude Code**
 
 ```
 When the underlying model supports prompt caching (Gemini 3.x does
@@ -905,7 +905,7 @@ Conventions:
 
 ## #22 Plugin system + marketplace
 
-**Tier 2 · Impact: medium · Complexity: L · Source: Claude Code**
+**Tier 2 . Impact: medium . Complexity: L . Source: Claude Code**
 
 ```
 Add a plugin bundling format that ships skills, agents, hooks, MCP
@@ -951,7 +951,7 @@ Conventions:
 
 ## #23 Output styles / theming
 
-**Tier 2 · Impact: low-medium · Complexity: S · Source: Claude Code**
+**Tier 2 . Impact: low-medium . Complexity: S . Source: Claude Code**
 
 ```
 Add user-pickable color/glyph themes for the tool-call trace.
@@ -961,9 +961,9 @@ Settings:
 - Themes defined in `~/.open-code/themes/<name>.json`:
     {
       "glyphs": {
-        "tool_call_start": "▶",
-        "tool_ok":   "✓",
-        "tool_err":  "✗"
+        "tool_call_start": ">",
+        "tool_ok":   "[OK]",
+        "tool_err":  "[X]"
       },
       "colors": {
         "tool_call":  "cyan",
@@ -990,7 +990,7 @@ Conventions:
 
 ## #24 `/loop` and `/schedule` commands
 
-**Tier 2 · Impact: medium · Complexity: M · Source: Claude Code**
+**Tier 2 . Impact: medium . Complexity: M . Source: Claude Code**
 
 ```
 Add two recurring-execution commands for autonomous workflows.
@@ -1026,7 +1026,7 @@ Conventions:
 
 ## #25 Managed settings enforcement
 
-**Tier 2 · Impact: low-medium · Complexity: M · Source: Claude Code**
+**Tier 2 . Impact: low-medium . Complexity: M . Source: Claude Code**
 
 ```
 Add an org-level settings file that's read but cannot be overridden
@@ -1040,7 +1040,7 @@ Path (platform-conventional):
 Or an `OPEN_CODE_MANAGED_PATH` env var.
 
 Enforcement:
-- managed.json is loaded FIRST (lowest precedence) — but specific
+- managed.json is loaded FIRST (lowest precedence) -- but specific
   keys can be marked `_locked: true` (sibling boolean), which makes
   them immutable from user/project layers.
 - Locked keys win even over CLI flags (with a warning to stderr).
@@ -1059,11 +1059,11 @@ Conventions:
 
 ---
 
-# Tier 3 — Advanced / polish
+# Tier 3 -- Advanced / polish
 
 ## #26 Codemaps
 
-**Tier 3 · Impact: medium · Complexity: M · Source: Windsurf / Cognition**
+**Tier 3 . Impact: medium . Complexity: M . Source: Windsurf / Cognition**
 
 ```
 Add a `/codemap generate` command that runs a strong model to write
@@ -1094,7 +1094,7 @@ Conventions:
 
 ## #27 OS-native sandbox
 
-**Tier 3 · Impact: medium · Complexity: M · Source: OpenAI Codex CLI**
+**Tier 3 . Impact: medium . Complexity: M . Source: OpenAI Codex CLI**
 
 ```
 Add a kernel-level sandbox layer below the permission system.
@@ -1134,7 +1134,7 @@ Conventions:
 
 ## #28 LSP context injection
 
-**Tier 3 · Impact: medium · Complexity: L · Source: Crush**
+**Tier 3 . Impact: medium . Complexity: L . Source: Crush**
 
 ```
 Add language-server integration so the model has O(1) access to
@@ -1168,7 +1168,7 @@ Conventions:
 
 ## #29 Oracle subagent pattern
 
-**Tier 3 · Impact: medium · Complexity: S · Source: Sourcegraph Amp**
+**Tier 3 . Impact: medium . Complexity: S . Source: Sourcegraph Amp**
 
 ```
 Add an `oracle` tool that wraps subagent delegation (#4) into a
@@ -1204,7 +1204,7 @@ Conventions:
 
 ## #30 Browser-use tool
 
-**Tier 3 · Impact: medium · Complexity: L · Source: Cline**
+**Tier 3 . Impact: medium . Complexity: L . Source: Cline**
 
 ```
 Add a Puppeteer/Playwright-driven browser tool.
@@ -1238,7 +1238,7 @@ Conventions:
 
 ## #31 Watch-mode AI comments
 
-**Tier 3 · Impact: medium · Complexity: S · Source: Aider**
+**Tier 3 . Impact: medium . Complexity: S . Source: Aider**
 
 ```
 Add a `/watch` REPL command that tails the filesystem for files
@@ -1271,7 +1271,7 @@ Conventions:
 
 ## #32 Parallel subagent dispatch
 
-**Tier 3 · Impact: medium · Complexity: L · Source: Cursor SDK**
+**Tier 3 . Impact: medium . Complexity: L . Source: Cursor SDK**
 
 ```
 Extend the delegate tool (#4) to support fanning out to multiple
@@ -1301,7 +1301,7 @@ Conventions:
 
 ## #33 Cloud provider routing
 
-**Tier 3 · Impact: low-medium · Complexity: M · Source: Claude Code**
+**Tier 3 . Impact: low-medium . Complexity: M . Source: Claude Code**
 
 ```
 Add LLM provider adapters beyond direct google-genai (already the
@@ -1309,7 +1309,7 @@ Mara persona trigger from v0.1's persona doc).
 
 Adapters:
 - Vertex AI (Gemini via GCP project)
-- Bedrock (Claude / etc. via AWS — needs Anthropic adapter)
+- Bedrock (Claude / etc. via AWS -- needs Anthropic adapter)
 - Generic HTTP gateway (compatible with OpenAI API)
 
 Mechanism:
@@ -1321,7 +1321,7 @@ Mechanism:
 Implementation hints:
 - New module `providers.py` (~300 LOC for two adapters; more for
   Bedrock).
-- Triggers the Mara persona from v0.1 — add it to personas.md
+- Triggers the Mara persona from v0.1 -- add it to personas.md
   alongside Jeff.
 
 Acceptance:
@@ -1339,13 +1339,13 @@ Conventions:
 
 ## #34 IDE integrations (VS Code, JetBrains)
 
-**Tier 3 · Impact: low-medium (for CLI-first) · Complexity: XL · Source: Claude Code**
+**Tier 3 . Impact: low-medium (for CLI-first) . Complexity: XL . Source: Claude Code**
 
 ```
 Build VS Code + JetBrains extensions that share session state with
 the CLI.
 
-Scope (v0.5 — minimal):
+Scope (v0.5 -- minimal):
 - VS Code extension that:
   - Reads the JSONL transcripts and renders them in a panel
   - Has a "Continue in open-code" button that opens a terminal with
@@ -1376,7 +1376,7 @@ Conventions:
 
 ## #35 Auto-select edit format per model
 
-**Tier 3 · Impact: low-medium · Complexity: M · Source: Aider**
+**Tier 3 . Impact: low-medium . Complexity: M . Source: Aider**
 
 ```
 After #8 (V4A apply_patch), some models will be better at one edit
@@ -1407,7 +1407,7 @@ Conventions:
 
 ## #36 Vim visual modes in REPL
 
-**Tier 3 · Impact: low · Complexity: S · Source: Claude Code**
+**Tier 3 . Impact: low . Complexity: S . Source: Claude Code**
 
 ```
 Add vim-style visual selection in the REPL prompt for users who
@@ -1422,7 +1422,7 @@ Scope (v0.5):
 Implementation hints:
 - Use `prompt_toolkit` for this (replaces `input()`). Adds a dep
   but unlocks proper TUI capabilities.
-- Or build a tiny custom state machine over `readline` — but
+- Or build a tiny custom state machine over `readline` -- but
   prompt_toolkit is simpler and gives history search, multiline,
   syntax highlighting for free.
 
@@ -1432,7 +1432,7 @@ Acceptance:
 - A104 Existing line editing (Ctrl+A / Ctrl+E etc.) still works.
 
 Conventions:
-- New dep: prompt_toolkit (substantial — consider gating behind
+- New dep: prompt_toolkit (substantial -- consider gating behind
   `--tui` flag).
 - `tests/probe_vim_repl.py` (hard to test; document manual
   verification).
@@ -1443,7 +1443,7 @@ Conventions:
 
 ## #37 PowerShell tool on Windows
 
-**Tier 3 · Impact: low · Complexity: S · Source: Claude Code**
+**Tier 3 . Impact: low . Complexity: S . Source: Claude Code**
 
 ```
 When `OPEN_CODE_USE_POWERSHELL=1` (env or settings), route
@@ -1469,7 +1469,7 @@ Conventions:
 
 ## #38 Native CLI binary
 
-**Tier 3 · Impact: low · Complexity: L · Source: Claude Code**
+**Tier 3 . Impact: low . Complexity: L . Source: Claude Code**
 
 ```
 Build a per-platform native binary via PyInstaller (simplest) or
@@ -1493,7 +1493,7 @@ Acceptance:
 
 Conventions:
 - New dir `build/`.
-- This is mostly a packaging task — minimal source change.
+- This is mostly a packaging task -- minimal source change.
 - spec/gap-log/runs/commit.
 ```
 
@@ -1517,5 +1517,5 @@ all new assertions together.
 
 Pre-commitment from v0.4: when `open_code.py` next exceeds 1000
 lines, extract `cli.py` (argparse + main glue) before adding new
-scope. Several Tier 1 prompts above will push past that line —
+scope. Several Tier 1 prompts above will push past that line --
 expect to do the extraction before #1, #2, or #3.

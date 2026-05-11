@@ -1,23 +1,23 @@
 # Personas
 
 > v0.1 ships the primary persona's workflow. Secondary/tertiary wait
-> until v0.1 is concretely 🟢 against the primary's criterion.
+> until v0.1 is concretely [OK] against the primary's criterion.
 
 ---
 
-## Primary persona — v0.1 ships this workflow
+## Primary persona -- v0.1 ships this workflow
 
-### Jeff — Indie developer building LLM-driven systems
+### Jeff -- Indie developer building LLM-driven systems
 
 **Daily pain (current workflow):**
 
 Jeff has been building agentGraph in Claude Code. Each session costs
-$0.20–$1.00, with ~95k tokens of context overhead per call. A
-productive coding day burns $5–$15 in Anthropic credits. He has a
+$0.20-$1.00, with ~95k tokens of context overhead per call. A
+productive coding day burns $5-$15 in Anthropic credits. He has a
 Gemini API key with a generous free tier (Gemini 1.5/2.5 Flash is
 free for most personal use) sitting idle. When he wants to spin up
-a quick coding task — "scaffold a small CLI", "add a feature to a
-prototype", "explore an unfamiliar codebase" — paying Anthropic
+a quick coding task -- "scaffold a small CLI", "add a feature to a
+prototype", "explore an unfamiliar codebase" -- paying Anthropic
 prices feels disproportionate for the task. He's also wary of
 vendor lock-in: every project he builds in Claude Code is a
 project he can't trivially run with a different LLM if Anthropic
@@ -47,17 +47,17 @@ his own tests, accepts or rejects.
 **Success criterion (the "outperforms Claude Code for cheap tasks" bar):**
 
 - Cold-start `open-code "task"` to first model token: < 5 seconds.
-- Successfully completes a task that requires ≥3 tool calls (e.g.,
+- Successfully completes a task that requires >=3 tool calls (e.g.,
   "read foo.py, add a docstring, save it"). Real Gemini API. No
   mocks.
-- Cost per task: at least 10× cheaper than Claude Code for an
+- Cost per task: at least 10x cheaper than Claude Code for an
   equivalent task. Measured by tokens.
 - Cross-platform: same `python open_code.py "task"` works on
   Windows / macOS / Linux without per-platform branches.
-- Total surface: one Python file ≤ 500 lines, plus
-  `requirements.txt` with ≤ 5 deps.
-- Fails loudly on bad input: missing API key → clear error, not a
-  traceback. Network error → clear error. Tool-execution error →
+- Total surface: one Python file <= 500 lines, plus
+  `requirements.txt` with <= 5 deps.
+- Fails loudly on bad input: missing API key -> clear error, not a
+  traceback. Network error -> clear error. Tool-execution error ->
   surfaced to model, model decides next step.
 
 **What "no" looks like (anti-success):**
@@ -73,22 +73,22 @@ his own tests, accepts or rejects.
 
 ---
 
-## Secondary persona — v0.2 candidate
+## Secondary persona -- v0.2 candidate
 
-### Mara — Backend engineer at a SOC2-regulated startup
+### Mara -- Backend engineer at a SOC2-regulated startup
 
 Wants the same workflow but pinned to her org's internal LLM gateway
 (routes to Vertex/Bedrock/OpenAI behind a SSO/compliance layer).
 v0.2 should let her plug a custom HTTP endpoint + custom request/
 response adapter so open-code works against her gateway.
 
-Out of v0.1; will land in v0.2 once Jeff's loop is concretely 🟢.
+Out of v0.1; will land in v0.2 once Jeff's loop is concretely [OK].
 
 ---
 
-## Tertiary persona — v0.3+ backlog
+## Tertiary persona -- v0.3+ backlog
 
-### Quinn — ML researcher running on a laptop without internet
+### Quinn -- ML researcher running on a laptop without internet
 
 Wants open-code to work against a local model (Ollama,
 llama.cpp, MLX). Needs offline tool-use compatibility. Adds a
@@ -102,7 +102,7 @@ Out of v0.1.
 
 - The primary persona's pain is real and measurable (cost). The MVP
   bar is "useful enough that Jeff would reach for `open-code` instead
-  of `claude` for at least 30% of his daily sessions" — operationalized
+  of `claude` for at least 30% of his daily sessions" -- operationalized
   in mvp-spec.md as a token-cost ratio.
 - v0.1 is deliberately LLM-singular (Gemini only) to keep the slice
   small. v0.2's Mara persona is what motivates the adapter abstraction;

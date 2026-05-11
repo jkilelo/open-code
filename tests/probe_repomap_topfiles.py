@@ -1,7 +1,7 @@
 """Probe: does the PageRank fix actually CHANGE rankings in real repos?
 
 If the fix is a no-op for the common case, the v0.13 claim that
-"repomap produces useful symbol skeletons" was suspect — the
+"repomap produces useful symbol skeletons" was suspect -- the
 algorithm bug wasn't materially impacting results. If the fix
 dramatically changes top files, the prior repomap was lying.
 """
@@ -28,7 +28,7 @@ print(f"edges built; {len(edges)} nodes")
 
 # Current ranking (with fixed PageRank)
 ranked = sorted(pagerank(edges).items(), key=lambda kv: -kv[1])
-print(f"\n=== TOP 10 (current pagerank — fixed) ===")
+print(f"\n=== TOP 10 (current pagerank -- fixed) ===")
 for p, score in ranked[:10]:
     try:
         rel = p.relative_to(root)

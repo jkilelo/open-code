@@ -24,7 +24,7 @@ Invocation (REPL):  /skill review-pr 1234
 
 What the user types becomes `$ARGUMENTS` and `$1`, `$2`, ... `$N`
 (space-split positional). The body's `` !`cmd` `` blocks are resolved
-via subprocess.run before the body reaches the model — the model
+via subprocess.run before the body reaches the model -- the model
 sees only the resolved text.
 
 `disable-model-invocation: true` is reserved for future auto-discovery
@@ -49,7 +49,7 @@ MAX_SKILL_BODY_BYTES = 50_000
 SKILLS_REL = ".open-code/skills"
 COMMAND_TIMEOUT_SECS = 20
 
-# Tier 2 #21 — skill prompt caching. Skills with frontmatter
+# Tier 2 #21 -- skill prompt caching. Skills with frontmatter
 # `cache: true` get their expanded body memoized by
 # (skill_path_mtime, args_string) for `_CACHE_TTL_SECS`. Default off
 # at the per-skill level so prior behavior is preserved.
@@ -70,7 +70,7 @@ class Skill:
     body: str
     allowed_tools: list[str] = field(default_factory=list)
     disable_model_invocation: bool = False
-    # Tier 2 #21 — when True (frontmatter `cache: true`), expanded
+    # Tier 2 #21 -- when True (frontmatter `cache: true`), expanded
     # body is memoized for OPEN_CODE_SKILL_CACHE_TTL seconds (default 300).
     cache: bool = False
     path: Path | None = None

@@ -2,7 +2,7 @@
 
 Claude Code's context window is 200k tokens. Performance degrades as
 it fills. **Most Claude Code failure modes are context-management
-failures.** The persona-mvp-kit's discipline reduces them — but you
+failures.** The persona-mvp-kit's discipline reduces them -- but you
 still need the explicit toolkit.
 
 ## What survives a session, what doesn't
@@ -87,8 +87,8 @@ lines 400-450. Use `Read` with `offset` and `limit`. Use Grep to find
 what you need before Reading.
 
 ### Prefer Glob/Grep over Read for discovery
-"Where is X defined?" → Grep, not Read every file.
-"What files match pattern?" → Glob, not ls/find.
+"Where is X defined?" -> Grep, not Read every file.
+"What files match pattern?" -> Glob, not ls/find.
 
 ### Use `@path` imports in CLAUDE.md
 Long instructions reference shorter files. `@methodology/01-PERSONAS.md`
@@ -109,9 +109,9 @@ corrections.
 Install a custom status line (`/statusline`) to track context fill
 in real time. When you see context at 60%+, decide actively:
 
-- Am I still on the same task? → keep going
-- Switching tasks? → `/clear`
-- Mid-task but loaded a lot of irrelevant content? → `/compact <focus>`
+- Am I still on the same task? -> keep going
+- Switching tasks? -> `/clear`
+- Mid-task but loaded a lot of irrelevant content? -> `/compact <focus>`
 
 ## Anti-patterns
 
@@ -145,7 +145,7 @@ Start a fresh session when:
 - Two+ corrections on the same issue (`/clear` and prompt better)
 - Context has accumulated 60%+ of file reads you don't need
 - Switching from "exploration" to "implementation" (per the
-  4-phase recipe: explore → plan → implement → commit)
+  4-phase recipe: explore -> plan -> implement -> commit)
 
 Resume a session (with `claude --resume` or `--continue`) when:
 
@@ -158,8 +158,8 @@ Per official guidance, name long-running sessions with `/rename`
 
 ## Reference
 
-- [Claude Code best practices § Manage your session](https://code.claude.com/docs/en/best-practices)
+- [Claude Code best practices Sec. Manage your session](https://code.claude.com/docs/en/best-practices)
 - [How Claude Code works (agentic loop, context management)](https://code.claude.com/docs/en/how-claude-code-works)
-- `@methodology/04-RUN-THE-WORKFLOW.md` — when to use a fresh session
+- `@methodology/04-RUN-THE-WORKFLOW.md` -- when to use a fresh session
   for verification
-- `.claude/agents/` — the three subagents that keep main context clean
+- `.claude/agents/` -- the three subagents that keep main context clean

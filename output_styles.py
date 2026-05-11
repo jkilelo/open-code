@@ -1,8 +1,8 @@
-"""Output styles (Tier 2 #23) — system_instruction overlays.
+"""Output styles (Tier 2 #23) -- system_instruction overlays.
 
 Modeled on Claude Code's named output styles. A style is a short
 block of guidance appended to the system_instruction that shifts
-the model's TONE — concise/verbose/explanatory/etc. — without
+the model's TONE -- concise/verbose/explanatory/etc. -- without
 changing capabilities.
 
 Built-in styles ship as Python strings. Users can also drop
@@ -16,7 +16,7 @@ Resolution order:
   3. Built-in style with the given name
   4. Built-in `default` (empty overlay) if nothing matches
 
-The "default" style intentionally has an empty overlay — picking it
+The "default" style intentionally has an empty overlay -- picking it
 means "no styling beyond the base system_instruction."
 """
 from __future__ import annotations
@@ -105,8 +105,8 @@ def list_available(cwd: Path) -> list[tuple[str, str]]:
 def resolve_overlay(style_name: str, cwd: Path) -> tuple[str, str]:
     """Resolve a style name to (overlay_text, source_label).
 
-    Resolution order: project file → user file → plugin file → built-in
-    → empty.  Returns ("", "default") for the bare "default" style.
+    Resolution order: project file -> user file -> plugin file -> built-in
+    -> empty.  Returns ("", "default") for the bare "default" style.
     """
     name = (style_name or "default").strip()
     if not name:
@@ -127,7 +127,7 @@ def resolve_overlay(style_name: str, cwd: Path) -> tuple[str, str]:
                     f"user:{user_file}")
         except OSError:
             pass
-    # Tier 2 #22 — plugin-provided
+    # Tier 2 #22 -- plugin-provided
     # Brutal-review H2: narrowed exception scope. ImportError is the
     # only "plugins module unavailable" path; OSError covers file
     # system issues during the scan. Any other exception is a real

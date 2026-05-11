@@ -24,7 +24,7 @@ Configuration is read from settings.json under `mcpServers`:
   }
 
 Server-startup errors are logged to stderr but never kill the
-session — the rest of open-code (built-in tools, project hooks,
+session -- the rest of open-code (built-in tools, project hooks,
 skills) keeps working.
 """
 from __future__ import annotations
@@ -45,7 +45,7 @@ PROTOCOL_VERSION = "2024-11-05"
 # Per-call timeout for blocking JSON-RPC reads (now actually enforced).
 CALL_TIMEOUT_SECS = 60
 # Sentinel value pushed onto the per-server queue when the server's
-# stdout closes — lets `_call` distinguish "no reply yet" from "server
+# stdout closes -- lets `_call` distinguish "no reply yet" from "server
 # is gone."
 _EOF_SENTINEL = object()
 
@@ -127,7 +127,7 @@ class MCPClient:
             except Exception as exc:
                 srv.last_error = f"{type(exc).__name__}: {exc}"
                 sys.stderr.write(
-                    f"[mcp: {name!r} startup failed — {srv.last_error}]\n"
+                    f"[mcp: {name!r} startup failed -- {srv.last_error}]\n"
                 )
                 self._terminate(srv)
 
@@ -162,7 +162,7 @@ class MCPClient:
         """Drain stdout and dispatch each response to the right waiter.
 
         v0.14.1 used a single Queue and dropped messages with the wrong
-        id — that was a concurrency bug. Now we look up the response
+        id -- that was a concurrency bug. Now we look up the response
         event by id and set it directly. Messages without a registered
         waiter (notifications, late replies) are dropped on the floor;
         that's deliberate.
@@ -187,7 +187,7 @@ class MCPClient:
                     continue
                 msg_id = msg.get("id")
                 if msg_id is None:
-                    continue  # notification — ignore for now
+                    continue  # notification -- ignore for now
                 with srv.response_lock:
                     if msg_id in srv.response_events:
                         srv.response_slots[msg_id] = msg
@@ -267,7 +267,7 @@ class MCPClient:
         eff_timeout = CALL_TIMEOUT_SECS if timeout is None else timeout
 
         # Allocate a unique id and register a waiter slot BEFORE writing
-        # the request — otherwise a very fast reply could arrive before
+        # the request -- otherwise a very fast reply could arrive before
         # we've registered.
         with srv.next_id_lock:
             msg_id = srv.next_id
@@ -300,7 +300,7 @@ class MCPClient:
                 msg = srv.response_slots.pop(msg_id, None)
             if msg is not None:
                 return msg
-            # Event was set but no slot — server hit EOF.
+            # Event was set but no slot -- server hit EOF.
             stderr_tail = "".join(srv.stderr_buf[-20:])[:500]
             raise RuntimeError(
                 f"server {srv.name!r} closed stdout before reply; "

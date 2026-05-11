@@ -36,7 +36,7 @@ for msg, want in cases:
 # === Test 2: live run with a deliberately-bogus primary model ===
 api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 if not api_key:
-    print("\nNO GEMINI_API_KEY — skipping live fallback test")
+    print("\nNO GEMINI_API_KEY -- skipping live fallback test")
     sys.exit(0)
 
 print("\n=== Live fallback with bogus primary ===")

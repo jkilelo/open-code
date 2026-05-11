@@ -29,12 +29,12 @@ bash .claude/hooks/install-check.sh
 Expected output:
 ```
 === persona-mvp-kit install check ===
-[1/5] External tools          ✓ bash / jq / git / find
-[2/5] Kit structure           ✓ all dirs present
-[3/5] Hook scripts executable ✓ all chmod +x
-[4/5] JSON validity           ✓ settings/plugin/mcp valid
+[1/5] External tools          [OK] bash / jq / git / find
+[2/5] Kit structure           [OK] all dirs present
+[3/5] Hook scripts executable [OK] all chmod +x
+[4/5] JSON validity           [OK] settings/plugin/mcp valid
 [5/5] Project state           ! personas.md absent (expected on first install)
-✓ Kit infrastructure is ready.
+[OK] Kit infrastructure is ready.
 ```
 
 ## What "install" means
@@ -49,7 +49,7 @@ After install, your project root has:
 | `.claude/agents/` | Three subagents Claude delegates to for isolated work |
 | `.claude/hooks/` | Shell scripts the hooks run (`require-personas.sh`, `remind-gap-log.sh`) |
 | `.claude/commands/` | Slash commands (`/persona-extract`, `/mvp-spec`, `/run-as-persona`, `/trace-root-cause`) |
-| `.mcp.json.example` | MCP server template — rename to `.mcp.json` after editing |
+| `.mcp.json.example` | MCP server template -- rename to `.mcp.json` after editing |
 | `methodology/` | 10 docs Claude reads on demand (via `@path` imports in CLAUDE.md) |
 | `templates/` | Fill-in templates for `personas.md`, `mvp-spec.md`, `gap-log.md`, commit messages |
 | `examples/` | Two worked examples Claude can reference |
@@ -60,7 +60,7 @@ folders without reading the relevant doc.
 
 ## Step-by-step
 
-### Option A — fresh project
+### Option A -- fresh project
 
 ```bash
 mkdir my-new-app && cd my-new-app
@@ -74,7 +74,7 @@ chmod +x .claude/hooks/*.sh
 
 # Optional: configure MCP servers
 cp .mcp.json.example .mcp.json
-# edit .mcp.json — set GITHUB_TOKEN in your environment or remove the github block
+# edit .mcp.json -- set GITHUB_TOKEN in your environment or remove the github block
 
 # Verify the layout
 ls -la
@@ -87,13 +87,13 @@ git add -A
 git commit -m "Adopt persona-mvp-kit"
 ```
 
-### Option B — existing project
+### Option B -- existing project
 
 ```bash
 cd /path/to/existing-project
 
 # Check for an existing CLAUDE.md
-test -f CLAUDE.md && echo "WARNING: existing CLAUDE.md found — decide: replace or merge"
+test -f CLAUDE.md && echo "WARNING: existing CLAUDE.md found -- decide: replace or merge"
 
 # Copy non-overlapping pieces
 cp -r /path/to/persona-mvp-kit/methodology .
@@ -101,7 +101,7 @@ cp -r /path/to/persona-mvp-kit/templates .
 cp -r /path/to/persona-mvp-kit/examples .
 cp -r /path/to/persona-mvp-kit/prompts .
 
-# Merge the .claude/ tree carefully — don't overwrite your own skills/commands/hooks
+# Merge the .claude/ tree carefully -- don't overwrite your own skills/commands/hooks
 mkdir -p .claude/skills .claude/agents .claude/hooks .claude/commands
 cp -r /path/to/persona-mvp-kit/.claude/skills/* .claude/skills/
 cp -r /path/to/persona-mvp-kit/.claude/agents/* .claude/agents/
@@ -114,7 +114,7 @@ chmod +x .claude/hooks/*.sh
 diff .claude/settings.json /path/to/persona-mvp-kit/.claude/settings.json
 
 # CLAUDE.md: either replace or merge by hand
-# The kit's CLAUDE.md is short (~110 lines) and uses @path imports —
+# The kit's CLAUDE.md is short (~110 lines) and uses @path imports --
 # it can usually be appended to yours
 cat /path/to/persona-mvp-kit/CLAUDE.md >> CLAUDE.md  # merge
 
@@ -125,7 +125,7 @@ git add -A
 git commit -m "Adopt persona-mvp-kit"
 ```
 
-### Option C — install as a git submodule
+### Option C -- install as a git submodule
 
 If you maintain the kit as its own repo and want updates to flow:
 
@@ -162,21 +162,21 @@ test runners, framework patterns).
 
 The kit relies on these standard Claude Code commands:
 
-- **`/init`** — generate or refine CLAUDE.md
-- **`/memory`** — view/edit CLAUDE.md, CLAUDE.local.md, rules, auto-memory
-- **`/skills`** — browse skills (type-to-filter as of v2.1.120+)
-- **`/agents`** — manage subagents
-- **`/hooks`** — inspect hook configuration (read-only menu)
-- **`/permissions`** — review and adjust permission rules
-- **`/config`** — open the config UI (theme, editor mode, output style)
-- **`/clear`** — reset context between unrelated tasks
-- **`/compact <focus>`** — manually compact, optionally focused
-- **`/rewind`** (or Esc Esc) — restore to a previous checkpoint
-- **`/recap`** — generate a one-line recap of session activity
-- **`/usage`** — context/cost/stats (replaces /cost + /stats as of v2.1.114)
-- **`/model`** — switch model mid-session
-- **`/permissions`** — adjust permission allowlist
-- **`/btw`** — quick side question that doesn't enter context
+- **`/init`** -- generate or refine CLAUDE.md
+- **`/memory`** -- view/edit CLAUDE.md, CLAUDE.local.md, rules, auto-memory
+- **`/skills`** -- browse skills (type-to-filter as of v2.1.120+)
+- **`/agents`** -- manage subagents
+- **`/hooks`** -- inspect hook configuration (read-only menu)
+- **`/permissions`** -- review and adjust permission rules
+- **`/config`** -- open the config UI (theme, editor mode, output style)
+- **`/clear`** -- reset context between unrelated tasks
+- **`/compact <focus>`** -- manually compact, optionally focused
+- **`/rewind`** (or Esc Esc) -- restore to a previous checkpoint
+- **`/recap`** -- generate a one-line recap of session activity
+- **`/usage`** -- context/cost/stats (replaces /cost + /stats as of v2.1.114)
+- **`/model`** -- switch model mid-session
+- **`/permissions`** -- adjust permission allowlist
+- **`/btw`** -- quick side question that doesn't enter context
 
 ## Verifying the install
 
@@ -200,8 +200,8 @@ If Claude skips steps 1-6, the kit isn't being read. Common causes:
 
 - Kit copied to a subdirectory instead of project root
 - `CLAUDE.md` masked by an enterprise / parent `CLAUDE.md`
-- Hook scripts not executable — `chmod +x .claude/hooks/*.sh`
-- `.claude/settings.json` has a JSON syntax error — `cat .claude/settings.json | jq`
+- Hook scripts not executable -- `chmod +x .claude/hooks/*.sh`
+- `.claude/settings.json` has a JSON syntax error -- `cat .claude/settings.json | jq`
 
 ## What the hooks enforce
 
@@ -212,7 +212,7 @@ Source files are `.py / .ts / .tsx / .js / .jsx / .rs / .go / .java
 
 Doc/config files (`personas.md`, `mvp-spec.md`, `gap-log.md`,
 `runs/*`, `.claude/*`, `CLAUDE.md`, `README.md`, `package.json`,
-`pyproject.toml`, etc.) are NOT blocked — so Claude can write
+`pyproject.toml`, etc.) are NOT blocked -- so Claude can write
 personas.md and the spec without fighting the hook.
 
 To customize what's source vs doc, edit `.claude/hooks/require-personas.sh`.
@@ -229,7 +229,7 @@ If you maintain the kit centrally, propagate changes via:
 - `git pull` in the submodule (Option C), or
 - Re-copying (Options A/B)
 
-Be careful with project-specific files — `personas.md`, `mvp-spec.md`,
+Be careful with project-specific files -- `personas.md`, `mvp-spec.md`,
 `gap-log.md`, `runs/*` should NOT be overwritten.
 
 ## Uninstalling
@@ -243,17 +243,17 @@ git add -A && git commit -m "Remove persona-mvp-kit"
 ```
 
 Your `personas.md`, `mvp-spec.md`, `gap-log.md`, `runs/*` files are
-project-specific — they stay.
+project-specific -- they stay.
 
 ## Reference
 
-- [Claude Code official docs](https://code.claude.com/docs/) — for
+- [Claude Code official docs](https://code.claude.com/docs/) -- for
   the underlying mechanics the kit builds on
-- [Best practices](https://code.claude.com/docs/en/best-practices) —
+- [Best practices](https://code.claude.com/docs/en/best-practices) --
   the kit aligns with all 5 sections
-- [Skills](https://code.claude.com/docs/en/skills) — frontmatter
+- [Skills](https://code.claude.com/docs/en/skills) -- frontmatter
   reference for adding your own
-- [Hooks](https://code.claude.com/docs/en/hooks-guide) — for
+- [Hooks](https://code.claude.com/docs/en/hooks-guide) -- for
   customizing the enforcement layer
-- [Subagents](https://code.claude.com/docs/en/sub-agents) — for
+- [Subagents](https://code.claude.com/docs/en/sub-agents) -- for
   adding domain-specific specialists

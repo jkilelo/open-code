@@ -2,7 +2,7 @@
 
 > "Give Claude a way to verify its work. This is the single highest-leverage
 > thing you can do."
-> — [Anthropic, Claude Code best practices](https://code.claude.com/docs/en/best-practices)
+> -- [Anthropic, Claude Code best practices](https://code.claude.com/docs/en/best-practices)
 
 This is the #1 published recommendation for working with Claude Code,
 and it fits the persona-mvp-kit perfectly: a persona's success
@@ -15,16 +15,16 @@ LLMs hallucinate confidently. Without a verification loop, "plausible-
 looking code" passes for "correct code" until a human runs it. Once
 the human is the only feedback loop, every mistake costs them time.
 
-A verification protocol — a test, a script, a screenshot comparison,
-a curl-able endpoint with known expected output — short-circuits the
+A verification protocol -- a test, a script, a screenshot comparison,
+a curl-able endpoint with known expected output -- short-circuits the
 feedback loop. Claude runs it, sees if it passes, fixes if it
 doesn't. The human's involvement drops to confirming the verification
 protocol matches the persona's intent.
 
 ## Every persona criterion has a verification method
 
-`mvp-spec.md § "Success criterion"` is the persona's "outperforms"
-bar. `mvp-spec.md § "How v0.1 is verified"` is the protocol that
+`mvp-spec.md Sec. "Success criterion"` is the persona's "outperforms"
+bar. `mvp-spec.md Sec. "How v0.1 is verified"` is the protocol that
 proves the bar is met. The latter is REQUIRED.
 
 Examples of good verification protocols:
@@ -55,7 +55,7 @@ criterion is too vague. Sharpen the criterion BEFORE writing code.
   unverifiable
 
 ### Curl-able endpoint
-- "Run this curl, expect this JSON" — works for any backend
+- "Run this curl, expect this JSON" -- works for any backend
 - Document the curl command in the spec; Claude runs it
 
 ### Side-by-side
@@ -72,9 +72,9 @@ criterion is too vague. Sharpen the criterion BEFORE writing code.
 
 For a v0.1 build:
 
-- `mvp-spec.md § "How v0.1 is verified"` — the protocol description
-- `tests/` — code that runs the protocol
-- `runs/YYYY-MM-DD-vX.Y.Z.md` — verbatim record of each run + the
+- `mvp-spec.md Sec. "How v0.1 is verified"` -- the protocol description
+- `tests/` -- code that runs the protocol
+- `runs/YYYY-MM-DD-vX.Y.Z.md` -- verbatim record of each run + the
   five-question report
 
 Each `runs/` file is the audit trail. When the user asks "is it
@@ -90,7 +90,7 @@ Some persona criteria are inherently fuzzy:
 
 These need *operationalization*:
 
-> "Well-written" = ≤2 grammatical errors per 100 words, run a
+> "Well-written" = <=2 grammatical errors per 100 words, run a
 > grammar checker as part of verification.
 
 > "Professional" = no all-caps, no exclamation marks except in
@@ -107,7 +107,7 @@ verbatim to `runs/`.
 
 ### Verification that mocks the thing being verified
 
-> ❌ "The brief generator returns ≥4 bullets" + the test mocks the
+> [FAIL] "The brief generator returns >=4 bullets" + the test mocks the
 > LLM to return exactly 4 bullets.
 
 This tests that the mock returns what the mock returns. It doesn't
@@ -117,7 +117,7 @@ Verification must hit the real system at least once per build.
 
 ### Tests that pass when the workflow is broken
 
-> ❌ A test that asserts `len(result.bullets) >= 0`. Always passes.
+> [FAIL] A test that asserts `len(result.bullets) >= 0`. Always passes.
 > Persona criterion ("5 bullets") not actually checked.
 
 Tests should assert what the persona CARES about, not what's easy
@@ -125,7 +125,7 @@ to assert.
 
 ### Asserting that code didn't crash, not that output is right
 
-> ❌ `assert result is not None`. Doesn't say what `result` should
+> [FAIL] `assert result is not None`. Doesn't say what `result` should
 > contain.
 
 The check must be specific enough that a sneaky bug producing
@@ -133,7 +133,7 @@ wrong-but-non-null output would fail it.
 
 ### Skipping verification for "trivial" changes
 
-> ❌ "It's just a config change, I'll skip the verification this
+> [FAIL] "It's just a config change, I'll skip the verification this
 > time."
 
 Config changes break verification routinely. Always run.
@@ -152,7 +152,7 @@ without running the workflow yourself"), restated.
 
 ## Reference
 
-- [Claude Code best practices § Give Claude a way to verify its work](https://code.claude.com/docs/en/best-practices)
-- `@methodology/04-RUN-THE-WORKFLOW.md` — how to run as the persona
-- `@methodology/05-BRUTAL-REVIEW.md` — how to interpret the verification
-- `@templates/mvp-spec.md` — § "How v0.1 is verified" template
+- [Claude Code best practices Sec. Give Claude a way to verify its work](https://code.claude.com/docs/en/best-practices)
+- `@methodology/04-RUN-THE-WORKFLOW.md` -- how to run as the persona
+- `@methodology/05-BRUTAL-REVIEW.md` -- how to interpret the verification
+- `@templates/mvp-spec.md` -- Sec. "How v0.1 is verified" template

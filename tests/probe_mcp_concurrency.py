@@ -27,7 +27,7 @@ while True:
     except Exception:
         continue
     if "id" not in req:
-        # notification — ignore
+        # notification -- ignore
         continue
     if req["method"] == "initialize":
         resp = {"jsonrpc": "2.0", "id": req["id"],

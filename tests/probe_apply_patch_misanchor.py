@@ -19,7 +19,7 @@ import tools, patches
 td = pathlib.Path(tempfile.mkdtemp(prefix="oc-misanchor-"))
 tools.CONFIG.cwd = td
 
-# Case 1: Substring anchor match — a short anchor matches MULTIPLE defs
+# Case 1: Substring anchor match -- a short anchor matches MULTIPLE defs
 # but only the first is considered. The hunk applies at the wrong place.
 target = td / "evil.py"
 target.write_text(

@@ -2,7 +2,7 @@
 
 Before v0.14.2: hooks fired automatically from any project's
 .open-code/hooks/. Cloning a hostile repo and running open-code in it
-would execute attacker code. This was logged as a brutal-review 🔴.
+would execute attacker code. This was logged as a brutal-review [FAIL].
 
 v0.14.2 introduces a trust gate:
   - `hooks.ensure_hooks_trusted(cwd, interactive=..., trust_override=...)`
@@ -15,7 +15,7 @@ v0.14.2 introduces a trust gate:
     has been marked trusted in this session.
 
 This probe asserts the FIX:
-  1. By default (untrusted), a malicious hook does NOT run — no marker.
+  1. By default (untrusted), a malicious hook does NOT run -- no marker.
   2. After explicit trust, the hook runs.
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ if os.name != "nt":
 # Reset session trust to simulate a fresh process.
 hooks.clear_session_trust()
 
-# ---- Case 1: UNTRUSTED — hooks must NOT fire ----
+# ---- Case 1: UNTRUSTED -- hooks must NOT fire ----
 result = hooks.fire("PreToolUse", td, session_id="x",
                     payload={"tool": "read_file", "args": {"path": "anywhere"}})
 assert result.invoked == [], (
@@ -53,7 +53,7 @@ assert not marker.exists(), (
 )
 print(f"[PASS] untrusted project: hook refused; marker NOT written")
 
-# ---- Case 2: EXPLICITLY TRUSTED — hooks fire normally ----
+# ---- Case 2: EXPLICITLY TRUSTED -- hooks fire normally ----
 hooks.mark_project_trusted(td, "allow", persist=False)
 result = hooks.fire("PreToolUse", td, session_id="x",
                     payload={"tool": "read_file", "args": {"path": "anywhere"}})

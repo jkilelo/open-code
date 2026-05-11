@@ -4,8 +4,8 @@ Extracted from open_code.py in v0.10.0-pre per the v0.9 pre-commitment
 (open_code.py was at 991 lines and growing).
 
 Provides:
-- REPL_BANNER, REPL_HELP — user-facing strings
-- run_repl(...) — the main interactive loop
+- REPL_BANNER, REPL_HELP -- user-facing strings
+- run_repl(...) -- the main interactive loop
 
 Slash commands:
   /help /exit /quit /clear /sessions /switch /cost /model /dump
@@ -25,7 +25,7 @@ from sessions import Session, SessionStore
 
 
 REPL_BANNER = """\
-open-code — Gemini coding agent (REPL mode)
+open-code -- Gemini coding agent (REPL mode)
 Session {sid} in {cwd}
 Type your task, /help for commands, /exit (or Ctrl+D) to leave.
 """
@@ -84,7 +84,7 @@ def run_repl(
     from open_code import run_loop, expand_file_refs, _print_session_list
 
     try:
-        import readline  # noqa: F401  — enables history + line editing
+        import readline  # noqa: F401  -- enables history + line editing
     except ImportError:
         pass
 
@@ -97,7 +97,7 @@ def run_repl(
             return 1
         initial_history, dropped = store.load_history(session, resume_max_messages)
         sys.stderr.write(
-            f"[resuming session {session.id} — {len(initial_history)} prior messages"
+            f"[resuming session {session.id} -- {len(initial_history)} prior messages"
             + (f"; {dropped} older dropped" if dropped else "")
             + "]\n"
         )
@@ -106,7 +106,7 @@ def run_repl(
         if session is not None:
             initial_history, dropped = store.load_history(session, resume_max_messages)
             sys.stderr.write(
-                f"[resuming session {session.id} — {len(initial_history)} prior messages"
+                f"[resuming session {session.id} -- {len(initial_history)} prior messages"
                 + (f"; {dropped} older dropped" if dropped else "")
                 + "]\n"
             )
@@ -158,7 +158,7 @@ def run_repl(
                     continue
                 session = new
                 history, dropped = store.load_history(session, resume_max_messages)
-                msg = f"[switched to session {session.id} — {len(history)} prior messages"
+                msg = f"[switched to session {session.id} -- {len(history)} prior messages"
                 if dropped:
                     msg += f"; {dropped} older dropped"
                 print(msg + "]")
@@ -269,7 +269,7 @@ def run_repl(
                     "describes, call write_file with the exact path and "
                     "content shown. For every shell command the plan "
                     "describes, call run_shell. Do NOT describe what you "
-                    "would do — actually call the tools. After all tool "
+                    "would do -- actually call the tools. After all tool "
                     "calls succeed, give a one-line confirmation."
                 )
                 task_with_plan = (
@@ -396,7 +396,7 @@ def run_repl(
                     store.append_checkpoint(
                         session, sha=sha, label=label, phase="manual",
                     )
-                    print(f"[checkpoint {sha[:10]} — {label}]")
+                    print(f"[checkpoint {sha[:10]} -- {label}]")
                 else:
                     print(f"[checkpoint failed: {msg}]")
                 continue
@@ -466,7 +466,7 @@ def run_repl(
                 preview = _ckpt.diff_summary(cwd, sha, "HEAD")
                 print(
                     f"About to restore to start of turn {n} back: "
-                    f"{sha[:10]} — {label}"
+                    f"{sha[:10]} -- {label}"
                 )
                 print("Changes that will be UNDONE:")
                 print(preview if preview.strip() else "  (no diff output)")
@@ -492,7 +492,7 @@ def run_repl(
                 ok, msg = _ckpt.restore(cwd, sha)
                 if ok:
                     print(
-                        f"[undone — restored to {sha[:10]}; "
+                        f"[undone -- restored to {sha[:10]}; "
                         f"use /restore {safety_sha[:10] if safety_sha else '<sha>'} "
                         f"to roll forward]"
                     )
@@ -500,7 +500,7 @@ def run_repl(
                     print(f"[undo failed: {msg}]")
                 continue
             if cmd == "style":
-                # Tier 2 #23 — output style overlay. The current
+                # Tier 2 #23 -- output style overlay. The current
                 # system_instruction was finalized at cli.main time, so
                 # mid-REPL changes apply to NEW sessions (via /clear)
                 # rather than the current one.
@@ -516,12 +516,12 @@ def run_repl(
                         print(f"  {name:<20}  ({source})")
                     continue
                 # Validate by resolving (returns "" overlay if unknown,
-                # but we still allow it — user might be staging a name).
+                # but we still allow it -- user might be staging a name).
                 _, source = _styles.resolve_overlay(rest, cwd)
                 settings.output_style = rest
                 print(
                     f"[output style set to {rest!r} ({source}); "
-                    "applies to NEW sessions — use /clear to apply now]"
+                    "applies to NEW sessions -- use /clear to apply now]"
                 )
                 continue
             if cmd == "effort":

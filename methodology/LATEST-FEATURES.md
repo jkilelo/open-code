@@ -9,7 +9,7 @@ may need a `claude --version` check + upgrade.
 - **`autoMode.hard_deny`**: unconditional block in auto mode,
   regardless of allow rules. The kit uses this for destructive
   commands (`rm -rf`, `sudo`, `curl|sh`).
-  See `.claude/settings.json § "autoMode.hard_deny"`.
+  See `.claude/settings.json Sec. "autoMode.hard_deny"`.
 
 - **Hooks receive `effort.level`**: hooks see the current effort
   setting via JSON input + `$CLAUDE_EFFORT` env var. The kit's
@@ -37,7 +37,7 @@ may need a `claude --version` check + upgrade.
 
 - **`--dangerously-skip-permissions`**: bypasses prompts for
   `.claude/`, `.git/`, shell configs, etc. The kit's hooks still
-  fire — exit 2 from `require-personas.sh` still blocks.
+  fire -- exit 2 from `require-personas.sh` still blocks.
 
 - **MCP servers `alwaysLoad: true`**: opt out of tool-search
   deferral. The kit's MCP examples don't need this.
@@ -57,7 +57,7 @@ may need a `claude --version` check + upgrade.
   scripts; switching to mcp_tool is a future option for
   cross-platform robustness.
 
-- **`/cost` and `/stats` → `/usage`**: merged. Same info, one
+- **`/cost` and `/stats` -> `/usage`**: merged. Same info, one
   command.
 
 - **`autoMode.allow/soft_deny/environment` with `"$defaults"` token**:
@@ -66,7 +66,7 @@ may need a `claude --version` check + upgrade.
 
 - **`CLAUDE_CODE_FORK_SUBAGENT=1`** (external builds): forked
   subagents inherit full conversation context. The kit's
-  brutal-reviewer benefits from this — set the env var if your
+  brutal-reviewer benefits from this -- set the env var if your
   build needs full context for the review.
 
 - **Default effort `high` for Opus/Sonnet 4.6 (Pro/Max)**: was
@@ -77,7 +77,7 @@ may need a `claude --version` check + upgrade.
 The kit ships `.claude/hooks/statusline.sh` which renders:
 
 ```
-[persona-mvp-kit] P:✓ S:✓ R:3 | gap: 2🔴 5🟢 | main
+[persona-mvp-kit] P:[OK] S:[OK] R:3 | gap: 2[FAIL] 5[OK] | main
 ```
 
 - P = personas.md present
@@ -123,7 +123,7 @@ These features exist but the kit doesn't ship config for them.
 Adopt per project if relevant:
 
 - **`agent` setting** (activate a custom agent as the main thread):
-  too aggressive for a default — would prevent normal sessions
+  too aggressive for a default -- would prevent normal sessions
   from working outside the kit's loop. Add to your project's
   `settings.local.json` if you want it.
 

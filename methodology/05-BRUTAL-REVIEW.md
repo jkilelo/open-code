@@ -1,4 +1,4 @@
-# 05 — Brutal honest review
+# 05 -- Brutal honest review
 
 After running the workflow as the persona, you produce a critique that
 **is not optimistic by default**. The user has copied this kit because
@@ -20,7 +20,7 @@ Three failure modes:
   Common cause: criterion not met, or fakes the persona will hit on
   day one.
 - **No, they'd be neutral.** The tool is no better or worse. Common
-  cause: criterion was vague — even success doesn't move the needle.
+  cause: criterion was vague -- even success doesn't move the needle.
 - **No, they'd be quietly worried.** The tool produces output that
   LOOKS right but the persona doesn't trust it. Common cause:
   fabricated citations, hidden mocks, no traceability.
@@ -31,14 +31,14 @@ If the answer isn't "yes, glad," fix it before claiming done.
 
 Honesty here isn't about modesty. It's about specificity.
 
-> ❌ "It mostly works but there are some rough edges."
-> ✅ "The brief generation works end-to-end with real Gemini on the
+> [FAIL] "It mostly works but there are some rough edges."
+> [OK] "The brief generation works end-to-end with real Gemini on the
 >     4-source p07 corpus. The citation [^N] markers are wired and
 >     the contradiction detector catches the $80M/$100M/$120M
 >     disagreement. BUT: (a) latency is 22s on warm cache, 45s on
->     cold — Sarah's spec said <30s, so cold-cache fails. (b) The
+>     cold -- Sarah's spec said <30s, so cold-cache fails. (b) The
 >     'history' tab is hardcoded to a JSON file, not reading from
->     SQLite — Sarah won't see her past briefs. (c) On a 10-source
+>     SQLite -- Sarah won't see her past briefs. (c) On a 10-source
 >     corpus, brief truncates at 7 facts because we hardcoded
 >     max_facts=7; Sarah's actual workflow tops out at 6 sources, so
 >     this is fine for v0.1."
@@ -74,16 +74,16 @@ Habits that counter the build bias:
 When reviewing, every claim about the slice falls into one of four
 categories. Color-code your honesty:
 
-- 🟢 **Met:** the criterion is concretely satisfied, you ran it, you
+- [OK] **Met:** the criterion is concretely satisfied, you ran it, you
   can quote the output. Ship.
-- 🟡 **Partial:** the slice does most of what the criterion asks but
+- [WARN] **Partial:** the slice does most of what the criterion asks but
   has a documented gap (cited specifically). Work in progress.
-- 🔴 **Failed:** the criterion is not met. Don't ship until fixed.
-- ⚫ **Not applicable for v0.1:** explicitly OUT of scope per
+- [FAIL] **Failed:** the criterion is not met. Don't ship until fixed.
+- [X] **Not applicable for v0.1:** explicitly OUT of scope per
   `mvp-spec.md`. Confirm it's still out.
 
-A v0.1 ships when ALL primary-persona criteria are 🟢 and remaining
-items are ⚫. 🟡 and 🔴 must move to 🟢 (or be deferred to v0.2 with
+A v0.1 ships when ALL primary-persona criteria are [OK] and remaining
+items are [X]. [WARN] and [FAIL] must move to [OK] (or be deferred to v0.2 with
 user approval) before claiming done.
 
 ## Reviewing for the persona's ergonomics
@@ -100,10 +100,10 @@ won't capture:
 
 - **Errors:** when something goes wrong, the persona needs to know
   why and what to do. "Internal Server Error" is not acceptable;
-  "Could not parse article 3 — try copy-pasting the body text" is.
+  "Could not parse article 3 -- try copy-pasting the body text" is.
 
 - **Trust:** the persona must be able to verify the output. Citations,
-  source URLs, computed scores — any output that can't be traced
+  source URLs, computed scores -- any output that can't be traced
   back to ground truth is suspicious.
 
 Each implicit expectation is a gap candidate. List them in the review.
@@ -135,7 +135,7 @@ Tell the user clearly:
 >    Root cause: we re-embed every span on every query. Fix:
 >    cache embeddings on first read.
 >
-> 2. History page hardcoded — Sarah won't see her past briefs.
+> 2. History page hardcoded -- Sarah won't see her past briefs.
 >    Root cause: I built the list page with a TODO before wiring
 >    the SQLite read. Fix: 20 lines of repository code + one
 >    SELECT.
@@ -152,13 +152,13 @@ Tell the user clearly, with proof:
 
 > v0.1 is shippable. Verified against Sarah's spec criterion:
 >
-> - 🟢 Brief produced in 18s on warm cache, 28s on cold (criterion
+> - [OK] Brief produced in 18s on warm cache, 28s on cold (criterion
 >   <30s).
-> - 🟢 Catches the $80M/$100M/$120M contradiction across 4 sources.
-> - 🟢 Each bullet has [^N] citation traceable to source URL.
-> - 🟢 History page reads from SQLite; Sarah sees her last 50
+> - [OK] Catches the $80M/$100M/$120M contradiction across 4 sources.
+> - [OK] Each bullet has [^N] citation traceable to source URL.
+> - [OK] History page reads from SQLite; Sarah sees her last 50
 >   briefs sorted by created_at desc.
-> - ⚫ No auth (Sarah is the only user; runs locally) — out per
+> - [X] No auth (Sarah is the only user; runs locally) -- out per
 >   spec.
 >
 > Run output: runs/2026-05-10-v0.1.0.md
@@ -167,6 +167,6 @@ Then wait. The user may want to ship as-is or refine.
 
 ## Read next
 
-- [`06-FIX-ROOT-CAUSES.md`](06-FIX-ROOT-CAUSES.md) — when the review
+- [`06-FIX-ROOT-CAUSES.md`](06-FIX-ROOT-CAUSES.md) -- when the review
   found gaps, fixing them right
-- [`07-SHIPPING.md`](07-SHIPPING.md) — commit + release discipline
+- [`07-SHIPPING.md`](07-SHIPPING.md) -- commit + release discipline

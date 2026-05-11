@@ -1,4 +1,4 @@
-"""Probe: mcp.py — JSON-RPC over stdio against a mock MCP server."""
+"""Probe: mcp.py -- JSON-RPC over stdio against a mock MCP server."""
 from __future__ import annotations
 import json
 import os

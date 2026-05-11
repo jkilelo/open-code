@@ -1,4 +1,4 @@
-"""Probe: Tier 2 polish trio — four-tier memory, effort levels, ultrathink.
+"""Probe: Tier 2 polish trio -- four-tier memory, effort levels, ultrathink.
 
 This single probe covers #18, #15, #16 plus the status-line plumbing
 because they all share the system_instruction / settings surface.
@@ -128,7 +128,7 @@ print("[PASS] EFFORT_BUDGETS table matches spec")
 
 # ---- Test 7: ultrathink marker is detected and stripped ----
 import re
-prompt = "ultrathink — why does foo break?"
+prompt = "ultrathink -- why does foo break?"
 assert re.search(r"\b" + re.escape(OC.ULTRATHINK_MARKER) + r"\b", prompt, flags=re.I)
 stripped = re.sub(r"\b" + re.escape(OC.ULTRATHINK_MARKER) + r"\b", "", prompt, flags=re.I).strip()
 assert "ultrathink" not in stripped.lower()

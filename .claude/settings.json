@@ -64,12 +64,12 @@
   },
 
   "_comment_subagentStatusLine": "When a subagent runs, show which one. Substitutes {subagent_name} at render time.",
-  "subagentStatusLine": "🔧 {subagent_name}",
+  "subagentStatusLine": "(fix) {subagent_name}",
 
   "_comment_attribution": "Auto-include kit + persona attribution in every commit and PR Claude creates. Customize via $PERSONA env var or edit at run time.",
   "attribution": {
-    "commit": "🤖 Generated under persona-mvp-kit\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
-    "pr": "🤖 Generated under persona-mvp-kit"
+    "commit": "(bot) Generated under persona-mvp-kit\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+    "pr": "(bot) Generated under persona-mvp-kit"
   },
 
   "_comment_includeGitInstructions": "Tell Claude to follow git conventions from CLAUDE.md (it should know without this; reinforces).",

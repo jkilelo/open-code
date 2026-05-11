@@ -13,15 +13,15 @@ You are editing a source file. The persona-mvp-kit standard requires
 ANY source-file edit.
 
 If you got here via the `PreToolUse` hook, the hook already verified
-this — you may proceed.
+this -- you may proceed.
 
 If the hook is disabled or you're operating outside the hook
 (`--permission-mode bypassPermissions`), STOP NOW and verify
 yourself:
 
 ```bash
-test -s personas.md || echo "MISSING — run /persona-extract"
-test -s mvp-spec.md || echo "MISSING — run /mvp-spec"
+test -s personas.md || echo "MISSING -- run /persona-extract"
+test -s mvp-spec.md || echo "MISSING -- run /mvp-spec"
 ```
 
 Bright line #4: never claim done without running the workflow as
@@ -34,6 +34,6 @@ This rule loads when you edit any of:
 - `src/**`, `lib/**`, `app/**` directories
 - Files with extensions `.py .ts .tsx .js .jsx .rs .go .java .rb .c .cpp .h .sql`
 
-Documentation, config, and kit-internal files don't load this rule —
+Documentation, config, and kit-internal files don't load this rule --
 they're allowed before personas exist (so the kit can write
 `personas.md` itself).

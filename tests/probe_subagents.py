@@ -1,4 +1,4 @@
-"""Probe: subagents.py — agent discovery + transcript creation."""
+"""Probe: subagents.py -- agent discovery + transcript creation."""
 from __future__ import annotations
 import json
 import sys
@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory() as d:
     sessions_in_cwd = store.list_for_cwd("/tmp/x")
     # The parent is one; subagent should be sorted out by filename pattern
     # (we expect ONLY the parent to appear here because list_for_cwd
-    # globs *.jsonl — but subagent paths are also *.jsonl, just with
+    # globs *.jsonl -- but subagent paths are also *.jsonl, just with
     # ".subagent.<n>." in the stem. Quick check: it's listed as a
     # "session" by header but our list logic still shows it. That's
     # acceptable for v0.10; document it.)

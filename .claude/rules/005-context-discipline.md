@@ -1,5 +1,5 @@
 ---
-# No paths field — this rule loads every session.
+# No paths field -- this rule loads every session.
 # Context discipline is universal; it applies regardless of which file
 # is being edited.
 ---
@@ -26,10 +26,10 @@ accumulated corrections.
 
 Three subagents in `.claude/agents/` run in fork context:
 
-- `persona-validator` — for persona quality checks
-- `brutal-reviewer` — for the review (heavy reading of mvp-spec
+- `persona-validator` -- for persona quality checks
+- `brutal-reviewer` -- for the review (heavy reading of mvp-spec
   + runs + gap-log + git log)
-- `root-cause-tracer` — for trace-three-deep on a gap
+- `root-cause-tracer` -- for trace-three-deep on a gap
 
 Delegate to them via `Use the X subagent to ...` so heavy work
 happens in their isolated 200k window, not yours.

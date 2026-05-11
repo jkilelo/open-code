@@ -15,17 +15,17 @@ multiple file operations:
     *** End Patch
 
 Supported actions:
-  Add File           — collect `+`-prefixed lines; create file (refuse if exists)
-  Delete File        — rm the path
-  Update File        — apply one or more hunks; each hunk is anchor + diff lines
-  Update + Move to   — same as Update, but rename target to a new path at the end
+  Add File           -- collect `+`-prefixed lines; create file (refuse if exists)
+  Delete File        -- rm the path
+  Update File        -- apply one or more hunks; each hunk is anchor + diff lines
+  Update + Move to   -- same as Update, but rename target to a new path at the end
 
 Hunk format:
   Optional `@@ context` line(s) that uniquely locate the change site.
   Then a mix of:
-    space-prefix    — context line (must match the file exactly)
-    `-` prefix      — line being removed (must match the file)
-    `+` prefix      — line being added
+    space-prefix    -- context line (must match the file exactly)
+    `-` prefix      -- line being removed (must match the file)
+    `+` prefix      -- line being added
 
 Hunks are anchored by surrounding text, not line numbers. If an
 anchor appears multiple times in the file (and the wider context
@@ -55,7 +55,7 @@ class Hunk:
     """One change-site within an Update File action."""
     anchors: list[str] = field(default_factory=list)  # @@ context lines
     lines: list[tuple[str, str]] = field(default_factory=list)
-    # Each `lines` entry is (kind, text) where kind ∈ {"ctx", "del", "add"}.
+    # Each `lines` entry is (kind, text) where kind in {"ctx", "del", "add"}.
 
 
 @dataclass
@@ -63,7 +63,7 @@ class PatchAction:
     op: str             # "add" | "delete" | "update"
     path: str
     move_to: str | None = None  # only meaningful with op == "update"
-    content: str | None = None  # only for "add" — assembled body
+    content: str | None = None  # only for "add" -- assembled body
     hunks: list[Hunk] = field(default_factory=list)
 
 
@@ -141,7 +141,7 @@ def parse_patch(text: str) -> list[PatchAction]:
                 raise PatchParseError("'*** Move to:' outside of an Update block")
             current.move_to = stripped.split(":", 1)[1].strip()
             continue
-        # Within an Add File block — collect +-prefixed lines as body
+        # Within an Add File block -- collect +-prefixed lines as body
         if current is not None and current.op == "add":
             if stripped.startswith("+"):
                 add_buf.append(stripped[1:])
@@ -151,7 +151,7 @@ def parse_patch(text: str) -> list[PatchAction]:
                 # Tolerate unexpected lines (e.g. blank context) by ignoring
                 add_buf.append(stripped)
             continue
-        # Within an Update File block — hunks
+        # Within an Update File block -- hunks
         if current is not None and current.op == "update":
             if stripped.startswith("@@"):
                 # New hunk if this is the first @@; otherwise stack anchors
@@ -163,7 +163,7 @@ def parse_patch(text: str) -> list[PatchAction]:
                 current_hunk.anchors.append(anchor)
                 continue
             if current_hunk is None:
-                # No anchor yet — start an implicit hunk with no anchor
+                # No anchor yet -- start an implicit hunk with no anchor
                 current_hunk = Hunk()
             if stripped.startswith("-"):
                 current_hunk.lines.append(("del", stripped[1:]))
@@ -172,7 +172,7 @@ def parse_patch(text: str) -> list[PatchAction]:
             elif stripped.startswith(" "):
                 current_hunk.lines.append(("ctx", stripped[1:]))
             elif stripped == "":
-                # Blank line between hunks — flush and reset
+                # Blank line between hunks -- flush and reset
                 if current_hunk is not None and current_hunk.lines:
                     current.hunks.append(current_hunk)
                     current_hunk = None
@@ -226,7 +226,7 @@ def _apply_hunk(file_lines: list[str], hunk: Hunk) -> tuple[list[str], str | Non
         return file_lines, "hunk had no `-` or context lines to anchor on"
 
     # Anchors narrow the search window. Each anchor must match EXACTLY
-    # ONE line (after stripping leading indentation) — the line either
+    # ONE line (after stripping leading indentation) -- the line either
     # equals the anchor, or starts with the anchor followed by a
     # word-boundary character (so `def foo` matches `def foo(...):`
     # but NOT `def foo_helper(...):`).
@@ -264,7 +264,7 @@ def _apply_hunk(file_lines: list[str], hunk: Hunk) -> tuple[list[str], str | Non
                 matches.append(i)
     if not matches:
         # Forgiving fallback: rstrip both sides (tolerates trailing
-        # whitespace differences). Collect ALL matches — the original
+        # whitespace differences). Collect ALL matches -- the original
         # code broke on the first, hiding ambiguity.
         for i in range(start_idx, len(file_lines) - len(before) + 1):
             if all(
@@ -279,7 +279,7 @@ def _apply_hunk(file_lines: list[str], hunk: Hunk) -> tuple[list[str], str | Non
         )
     if len(matches) > 1:
         return file_lines, (
-            f"hunk pattern is ambiguous — matches {len(matches)} locations "
+            f"hunk pattern is ambiguous -- matches {len(matches)} locations "
             "(add more @@ context or surrounding ctx lines to disambiguate)"
         )
 

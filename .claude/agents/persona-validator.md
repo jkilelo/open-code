@@ -16,51 +16,51 @@ For EACH persona in `personas.md`, verify all five fields are present
 and concrete:
 
 ### 1. Name + role + organization
-- ❌ "User" / "Power user" / "The team"
-- ❌ "Data scientist" without organization context
-- ✅ "Sarah Chen, Senior Data Scientist, Citi Risk Analytics, NYC"
+- [FAIL] "User" / "Power user" / "The team"
+- [FAIL] "Data scientist" without organization context
+- [OK] "Sarah Chen, Senior Data Scientist, Citi Risk Analytics, NYC"
 
 ### 2. Daily pain (current workflow)
-- ❌ "Spends a lot of time on research"
-- ❌ "Has trouble managing data"
-- ✅ Specific frequency (daily / weekly), duration (X min), failure
+- [FAIL] "Spends a lot of time on research"
+- [FAIL] "Has trouble managing data"
+- [OK] Specific frequency (daily / weekly), duration (X min), failure
   rate (Y% miss), and what the failure costs them
 
 ### 3. Primary workflow
-- ❌ "Build reports"
-- ❌ "Manage projects"
-- ✅ Single workflow, daily, high-pain, self-contained, with concrete
-  input → output description
+- [FAIL] "Build reports"
+- [FAIL] "Manage projects"
+- [OK] Single workflow, daily, high-pain, self-contained, with concrete
+  input -> output description
 
 ### 4. Success criterion ("outperforms human" bar)
-- ❌ "Better recall"
-- ❌ "Faster"
-- ❌ "More accurate"
-- ✅ Concrete + measurable: time bound, output format, failure modes
+- [FAIL] "Better recall"
+- [FAIL] "Faster"
+- [FAIL] "More accurate"
+- [OK] Concrete + measurable: time bound, output format, failure modes
   not tolerated, statable in the persona's own language
 
 ### 5. What "no" looks like (anti-success)
-- ❌ "If it's broken"
-- ❌ "If users don't like it"
-- ✅ Specific outputs that would make the persona refuse to adopt the
-  tool — mirror of the criterion
+- [FAIL] "If it's broken"
+- [FAIL] "If users don't like it"
+- [OK] Specific outputs that would make the persona refuse to adopt the
+  tool -- mirror of the criterion
 
 ## What you return
 
 Open with a one-line verdict:
 
-> **VERDICT: PASS** — every persona meets the bar; ready for /mvp-spec.
+> **VERDICT: PASS** -- every persona meets the bar; ready for /mvp-spec.
 
 OR
 
-> **VERDICT: FAIL** — N personas have M field-level gaps. Fix before
+> **VERDICT: FAIL** -- N personas have M field-level gaps. Fix before
 > /mvp-spec.
 
 Then list each persona with:
 
-- ✅ fields that pass (one line each)
-- ❌ fields that fail, quoting the actual content + specific refinement
-  (e.g., "Daily pain says 'spends time on research' — replace with
+- [OK] fields that pass (one line each)
+- [FAIL] fields that fail, quoting the actual content + specific refinement
+  (e.g., "Daily pain says 'spends time on research' -- replace with
   hours/day, articles/day, miss rate")
 
 Then list any structural issues:
@@ -68,7 +68,7 @@ Then list any structural issues:
 - More than 1 PRIMARY persona (only one ships in v0.1)
 - Personas that have the SAME workflow (should merge)
 - Personas whose workflows conflict with each other (will dilute the
-  v0.1 build — pick one for v0.1)
+  v0.1 build -- pick one for v0.1)
 
 Don't pad. Don't say "this is a great start." If it fails, fail
 honestly. If it passes, pass honestly.
@@ -78,7 +78,7 @@ honestly. If it passes, pass honestly.
 You receive a working directory. Read `personas.md` from there. If
 it's missing, report:
 
-> **VERDICT: FAIL** — personas.md does not exist. Run /persona-extract
+> **VERDICT: FAIL** -- personas.md does not exist. Run /persona-extract
 > first.
 
 If multiple persona files exist (rare), validate `personas.md`

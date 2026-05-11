@@ -1,14 +1,14 @@
 ---
 name: minimal-stack-selection
-description: Pick technology for the v0.1 build under the persona-mvp-kit standard. Each dependency must trace to a specific persona workflow; no speculative tech. Use when drafting mvp-spec.md § "Tech stack", when the user proposes adding a library mid-build, or when `npm install` / `pip install` / `uv add` is about to run.
+description: Pick technology for the v0.1 build under the persona-mvp-kit standard. Each dependency must trace to a specific persona workflow; no speculative tech. Use when drafting mvp-spec.md Sec. "Tech stack", when the user proposes adding a library mid-build, or when `npm install` / `pip install` / `uv add` is about to run.
 allowed-tools: Read, Grep, Glob
-when_to_use: Use when mvp-spec.md § "Tech stack" is being drafted; when a new dependency is proposed; before pip install / npm install / uv add commands.
+when_to_use: Use when mvp-spec.md Sec. "Tech stack" is being drafted; when a new dependency is proposed; before pip install / npm install / uv add commands.
 ---
 
 # Minimal stack selection
 
 Each dependency in v0.1 must trace to a persona need, written in
-`mvp-spec.md` § "Tech stack" with a one-paragraph justification.
+`mvp-spec.md` Sec. "Tech stack" with a one-paragraph justification.
 
 ## Default ladder
 
@@ -19,10 +19,10 @@ when the persona's stated criterion demands it.
 |---|---|---|
 | Sync HTTP backend | FastAPI / Flask / Hono | WebSockets, multi-host scale |
 | Persistence | SQLite (one file, one process) | concurrent writers OR multi-host |
-| ORM | none — raw SQL via stdlib | schema large enough that hand-SQL is error-prone |
+| ORM | none -- raw SQL via stdlib | schema large enough that hand-SQL is error-prone |
 | Schema migrations | none (edit schema in place) | persona's data is in production |
 | Frontend | one React/Vue/Svelte page, no router | persona needs N pages |
-| Frontend state | local `useState` | shared state across ≥3 pages |
+| Frontend state | local `useState` | shared state across >=3 pages |
 | Styling | Tailwind defaults | persona is design-sensitive |
 | LLM | one SDK + one model | persona requires multi-model |
 | Embeddings | hashing-based or local model | persona needs production-grade recall |
@@ -60,7 +60,7 @@ demands more.
 Each dependency in `mvp-spec.md` looks like this:
 
 ```markdown
-- **FastAPI** — Sarah's workflow is "POST 4 URLs, get markdown brief
+- **FastAPI** -- Sarah's workflow is "POST 4 URLs, get markdown brief
   back." She needs a long-lived service her team can hit. FastAPI's
   async is irrelevant here, but the auto-OpenAPI gives her a "try it"
   UI for free without me writing a frontend in v0.1.
@@ -96,4 +96,4 @@ it's out of v0.1.
 
 ## Reference
 
-Methodology: `@methodology/03-BUILD.md` § "Stack selection."
+Methodology: `@methodology/03-BUILD.md` Sec. "Stack selection."

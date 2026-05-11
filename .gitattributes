@@ -1,4 +1,8 @@
-# Normalize line endings to LF — keeps Windows + POSIX in sync.
+# Normalize line endings to LF -- keeps Windows + POSIX in sync.
+# Combined with the ASCII-only enforcement in tests/probe_ascii_only.py,
+# this guarantees identical rendering on every platform.
+
+* text=auto eol=lf
 
 *.sh           text eol=lf
 *.py           text eol=lf
@@ -10,3 +14,8 @@
 *.txt          text eol=lf
 .gitignore     text eol=lf
 .gitattributes text eol=lf
+
+# Windows-only artifacts keep their native line endings.
+*.bat          text eol=crlf
+*.cmd          text eol=crlf
+*.ps1          text eol=crlf

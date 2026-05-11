@@ -6,13 +6,13 @@
 # been run as the persona (no recent runs/ file).
 #
 # Triggers a soft block: returns JSON with decision=block + reason,
-# which tells Claude "you're not done yet — run /run-as-persona."
+# which tells Claude "you're not done yet -- run /run-as-persona."
 #
 # This is the deterministic enforcement of bright line #4:
 # "Never claim 'done' without running the workflow yourself."
 #
 # Exits 0 always (the block is signaled via JSON, not exit code).
-# Skips enforcement if personas haven't been set up yet — that's
+# Skips enforcement if personas haven't been set up yet -- that's
 # what require-personas.sh is for.
 
 set -euo pipefail
@@ -84,7 +84,7 @@ fi
 cat <<'EOF'
 {
   "decision": "block",
-  "reason": "The persona-mvp-kit standard requires running the workflow as the persona BEFORE claiming done. Source files have changed since the last runs/ file (or no run exists yet). Invoke /run-as-persona to execute mvp-spec.md § 'How v0.1 is verified' against real systems and save the output to runs/YYYY-MM-DD-vX.Y.Z.md. Then claim done."
+  "reason": "The persona-mvp-kit standard requires running the workflow as the persona BEFORE claiming done. Source files have changed since the last runs/ file (or no run exists yet). Invoke /run-as-persona to execute mvp-spec.md Sec. 'How v0.1 is verified' against real systems and save the output to runs/YYYY-MM-DD-vX.Y.Z.md. Then claim done."
 }
 EOF
 exit 0

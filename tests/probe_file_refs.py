@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory() as d:
     assert "aaa" in out and "bbb" in out
     print(f"[PASS] multiple refs -> 2 files injected")
 
-# Case 3: dedup — same ref twice doesn't double-inject
+# Case 3: dedup -- same ref twice doesn't double-inject
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
     (base / "a.txt").write_text("aaa", encoding="utf-8")

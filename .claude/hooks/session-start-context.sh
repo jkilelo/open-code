@@ -24,14 +24,14 @@ state="A"   # default: extraction mode
 
 if [[ -s "$PROJECT_DIR/personas.md" ]]; then
   primary=$(grep -m1 '^### ' "$PROJECT_DIR/personas.md" 2>/dev/null | sed 's/^### //' || echo "?")
-  status="${status}personas.md: ✓ (primary: ${primary})"$'\n'
+  status="${status}personas.md: [OK] (primary: ${primary})"$'\n'
   state="B"
 else
   status="${status}personas.md: MISSING"$'\n'
 fi
 
 if [[ -s "$PROJECT_DIR/mvp-spec.md" ]]; then
-  status="${status}mvp-spec.md: ✓"$'\n'
+  status="${status}mvp-spec.md: [OK]"$'\n'
   [[ "$state" == "B" ]] && state="C"
 else
   status="${status}mvp-spec.md: MISSING"$'\n'
@@ -52,10 +52,10 @@ fi
 
 if [[ -s "$PROJECT_DIR/gap-log.md" ]]; then
   # awk index() works portably across grep regex/locale quirks on Git Bash
-  open_count=$(awk 'BEGIN{c=0} {if (index($0,"🔴")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
-  wip_count=$(awk 'BEGIN{c=0} {if (index($0,"🟡")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
-  closed_count=$(awk 'BEGIN{c=0} {if (index($0,"🟢")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
-  status="${status}gap-log.md: ${open_count} 🔴 open, ${wip_count} 🟡 in-progress, ${closed_count} 🟢 closed"$'\n'
+  open_count=$(awk 'BEGIN{c=0} {if (index($0,"[FAIL]")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
+  wip_count=$(awk 'BEGIN{c=0} {if (index($0,"[WARN]")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
+  closed_count=$(awk 'BEGIN{c=0} {if (index($0,"[OK]")>0) c++} END{print c}' "$PROJECT_DIR/gap-log.md")
+  status="${status}gap-log.md: ${open_count} [FAIL] open, ${wip_count} [WARN] in-progress, ${closed_count} [OK] closed"$'\n'
 fi
 
 # Map state to next action.

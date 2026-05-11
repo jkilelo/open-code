@@ -1,4 +1,4 @@
-"""Probe: skills.py — discovery, frontmatter, $ARGUMENTS, !`cmd` blocks."""
+"""Probe: skills.py -- discovery, frontmatter, $ARGUMENTS, !`cmd` blocks."""
 from __future__ import annotations
 import sys
 import tempfile

@@ -6,8 +6,8 @@
 # exist at the project root.
 #
 # Exits with:
-#   0  → allow (edit is on a non-source file, or personas exist)
-#   2  → deny (block the edit; Claude sees stderr and adjusts)
+#   0  -> allow (edit is on a non-source file, or personas exist)
+#   2  -> deny (block the edit; Claude sees stderr and adjusts)
 #
 # Tweak the SOURCE_PATTERNS / DOC_EXCEPTIONS arrays to match your project's
 # layout. Doc/config files that don't represent the "build" are allowed
@@ -68,7 +68,7 @@ SOURCE_PATTERNS=(
   "Dockerfile"
 )
 
-# If we couldn't read a file path, allow — not our concern.
+# If we couldn't read a file path, allow -- not our concern.
 if [[ -z "$FILE_PATH" ]]; then
   exit 0
 fi
