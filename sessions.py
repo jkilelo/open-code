@@ -285,6 +285,27 @@ class SessionStore:
             },
         )
 
+    def append_checkpoint(self, session: Session, *, sha: str, label: str,
+                          phase: str) -> None:
+        """Record a shadow-git checkpoint event (Tier 2 #11).
+
+        `sha` is the full shadow-repo commit sha. `label` is a short
+        human-readable description. `phase` is "turn-start" (before
+        the user turn runs) or "turn-end" (after) or "manual" (REPL
+        `/checkpoint` command).
+        """
+        self._append(
+            session,
+            {
+                "kind": "checkpoint",
+                "sha": sha,
+                "short_sha": sha[:10],
+                "label": label,
+                "phase": phase,
+                "ts": _now(),
+            },
+        )
+
     def append_plan(self, session: Session, *, plan_id: str,
                     content: str, model: str) -> None:
         """Record a Plan/Act 'plan' artifact in the session JSONL.

@@ -228,6 +228,27 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.15.0 ships 🟢.** Tier 2: 4 of 15 features done. Next: #13 `/compact` + #19 extended @-providers (rest of Batch A).
 
+---
+
+## v0.15.1 — 2026-05-11 (Tier 2 Batch A finish)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#13** | **/compact slash command** (LLM-summarized older history; `kind:"compact"` JSONL event; `load_history` rewrites compacted msgs into a synthetic user message; default `keep_recent=10`) | ✅ | `tests/probe_tier2_batch_a_rest.py` tests 1-2: 10 msgs + compact + 3 recent → loads as summary+3, all 10 old msgs gone |
+| **#19** | **Extended @-providers** (Continue.dev pattern: `@diff`, `@diff:staged`, `@tree`, `@problems`, `@cwd`; 3-tier resolver; coexists with `@<path>` file refs; unknown `@<name>` passes through) | ✅ | probe tests 3-7: `@diff` in a real git repo, `@tree` listing, `@cwd` literal, file+provider coexistence, unknown-name preserved as literal |
+
+**v0.15.1 ships 🟢.** Tier 2 Batch A complete (6/6).
+
+---
+
+## v0.16.0 — 2026-05-11 (Tier 2 Batch B lead-off)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#11** | **Shadow-git checkpointing** (`.open-code/checkpoints.git/` as bare repo with `--work-tree=<cwd>`; `info/exclude` blocks `.open-code/` + caches; `snapshot()` uses `--allow-empty` so every turn has a marker; `restore()` does `read-tree --reset -u` + `clean -fd`; REPL `/checkpoints` `/checkpoint [label]` `/restore <ref>` with diff preview + confirmation + auto safety-snapshot; `--auto-checkpoint` CLI flag; `settings.auto_checkpoint`; `kind:"checkpoint"` JSONL events with phase ∈ {turn-start, turn-end, manual}) | ✅ | `tests/probe_checkpoints.py` 6/6: idempotent init, snapshot+list (3 ckpts newest-first), restore round-trip (file rolled back, untracked-in-target file removed), `.open-code/` excluded from snapshots, append_checkpoint JSONL semantics, graceful degrade when git missing |
+
+**v0.16.0 ships 🟢.** Tier 2: 7 of 15 features done. Next: #12 atomic-commit per turn (reuses snapshot infra for turn-end + rollback-on-error).
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

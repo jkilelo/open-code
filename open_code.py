@@ -681,6 +681,28 @@ def run_loop(
                 f"{ssr.additional_context}"
             )
 
+    # Auto-checkpoint (Tier 2 #11): snapshot the working tree at
+    # turn-start when settings.auto_checkpoint is True. Best-effort —
+    # if git is missing or the snapshot fails, the agent runs normally.
+    if (getattr(settings, "auto_checkpoint", False)
+            and session is not None and store is not None):
+        try:
+            import checkpoints as _ckpt
+            label = (task or "(empty task)").splitlines()[0][:80]
+            sha, msg = _ckpt.snapshot(CONFIG.cwd,
+                                      f"turn-start: {label}")
+            if sha:
+                store.append_checkpoint(
+                    session, sha=sha, label=label, phase="turn-start",
+                )
+                if verbose:
+                    sys.stderr.write(f"[checkpoint {sha[:10]} — {label}]\n")
+            elif verbose:
+                sys.stderr.write(f"[checkpoint skipped: {msg}]\n")
+        except Exception as exc:  # never let checkpointing crash the loop
+            if verbose:
+                sys.stderr.write(f"[checkpoint error: {exc}]\n")
+
     # Build the effective TOOL_DECLARATIONS list:
     # - Apply tool_allowlist if provided (subagent restriction)
     # - Append the delegate tool unless we're a subagent (no recursion)

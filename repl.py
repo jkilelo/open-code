@@ -45,6 +45,9 @@ Slash commands:
   /agents            list subagents under .open-code/agents/ (use via the delegate tool)
   /compact [keep]    summarize older history; keep last N msgs verbatim (default 10)
   /effort [name]     show or set reasoning effort (low/medium/high/xhigh)
+  /checkpoints       list recent shadow-git checkpoints (Tier 2 #11)
+  /checkpoint [label] take a manual snapshot now (use after a risky edit)
+  /restore <ref>     restore working tree to a prior checkpoint (DESTRUCTIVE; confirms)
   /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
   /plan <task>       run <task> in plan mode (read-only); save result as a plan event
   /act [task]        load most recent plan; switch to acceptEdits; execute
@@ -364,6 +367,74 @@ def run_repl(
                     f"[compacted: {len(dropped)} msgs -> {len(summary)}-char "
                     f"summary; {len(kept)} recent msgs preserved]"
                 )
+                continue
+            if cmd == "checkpoints":
+                import checkpoints as _ckpt
+                if not _ckpt.is_initialized(cwd):
+                    print(
+                        "[shadow repo not initialized; will auto-init on "
+                        "first /checkpoint or auto-checkpoint]"
+                    )
+                    continue
+                rows = _ckpt.list_checkpoints(cwd, limit=20)
+                if not rows:
+                    print("[no checkpoints yet]")
+                    continue
+                print("Recent shadow-git checkpoints (newest first):")
+                for r in rows:
+                    print(f"  {r['short_sha']}  {r['ts']}  {r['label']}")
+                continue
+            if cmd == "checkpoint":
+                import checkpoints as _ckpt
+                label = rest.strip() or f"manual: session {session.id[:8]}"
+                sha, msg = _ckpt.snapshot(cwd, label)
+                if sha:
+                    store.append_checkpoint(
+                        session, sha=sha, label=label, phase="manual",
+                    )
+                    print(f"[checkpoint {sha[:10]} — {label}]")
+                else:
+                    print(f"[checkpoint failed: {msg}]")
+                continue
+            if cmd == "restore":
+                import checkpoints as _ckpt
+                if not rest:
+                    print("usage: /restore <short-sha or ref>")
+                    continue
+                sha = _ckpt.resolve_ref(cwd, rest)
+                if sha is None:
+                    print(f"[no checkpoint matching {rest!r}]")
+                    continue
+                preview = _ckpt.diff_summary(cwd, sha, "HEAD")
+                print(f"About to restore working tree to {sha[:10]}.")
+                print("Changes that will be UNDONE (relative to current HEAD):")
+                print(preview if preview.strip() else "  (no diff output)")
+                try:
+                    ans = input(
+                        "[restore/cancel] (type 'restore' to confirm): "
+                    ).strip().lower()
+                except EOFError:
+                    ans = "cancel"
+                if ans != "restore":
+                    print("[cancelled]")
+                    continue
+                # Take a pre-restore safety snapshot so the user can
+                # roll forward again if they change their mind.
+                safety_sha, safety_msg = _ckpt.snapshot(
+                    cwd, f"pre-restore-from {sha[:10]}",
+                )
+                if safety_sha:
+                    store.append_checkpoint(
+                        session, sha=safety_sha,
+                        label=f"pre-restore-from {sha[:10]}",
+                        phase="manual",
+                    )
+                    print(f"[safety snapshot {safety_sha[:10]} taken]")
+                ok, msg = _ckpt.restore(cwd, sha)
+                if ok:
+                    print(f"[restored to {sha[:10]}; safety snapshot above to roll forward]")
+                else:
+                    print(f"[restore failed: {msg}]")
                 continue
             if cmd == "effort":
                 from settings import VALID_EFFORTS, Settings as _S

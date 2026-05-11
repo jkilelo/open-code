@@ -143,6 +143,14 @@ def build_parser() -> argparse.ArgumentParser:
              "(model / iter / tokens / refusals).",
     )
     parser.add_argument(
+        "--auto-checkpoint",
+        action="store_true",
+        help="Take a shadow-git snapshot of the working tree at the "
+             "start of each turn (Tier 2 #11). Requires `git` on PATH. "
+             "Stored under .open-code/checkpoints.git/. Use /checkpoints "
+             "and /restore in the REPL.",
+    )
+    parser.add_argument(
         "--root",
         default=os.environ.get("OPEN_CODE_ROOT", str(DEFAULT_OC_ROOT)),
         help=f"Sessions root dir (default: {DEFAULT_OC_ROOT}).",
@@ -218,6 +226,8 @@ def main(argv: list[str] | None = None) -> int:
         settings.editor_model = args.editor
     if args.effort is not None:
         settings.effort = args.effort
+    if args.auto_checkpoint:
+        settings.auto_checkpoint = True
 
     # Start any MCP servers declared in settings.json
     mcp_client: MCPClient | None = None

@@ -71,6 +71,10 @@ class Settings:
     # the Gemini config. "medium" is the default; "low"=0 thinking,
     # "high"=4096, "xhigh"=16384.
     effort: str = "medium"
+    # Shadow-git checkpoints (Tier 2 #11). When True, run_loop snapshots
+    # the working tree into `.open-code/checkpoints.git/` at the start
+    # of each turn. Off by default — requires `git` binary on PATH.
+    auto_checkpoint: bool = False
     raw: dict[str, Any] = field(default_factory=dict)
     # Per-file paths that contributed (for diagnostics)
     sources: list[Path] = field(default_factory=list)
@@ -157,6 +161,9 @@ def load_layered_settings(cwd: Path) -> Settings:
     effort_raw = merged.get("effort")
     effort = effort_raw if isinstance(effort_raw, str) and effort_raw in VALID_EFFORTS else "medium"
 
+    cps = merged.get("checkpoints") or {}
+    auto_checkpoint = bool(cps.get("auto", False)) if isinstance(cps, dict) else False
+
     return Settings(
         model=merged.get("model") if isinstance(merged.get("model"), str) else None,
         max_iterations=(merged.get("max_iterations")
@@ -168,6 +175,7 @@ def load_layered_settings(cwd: Path) -> Settings:
         architect_model=architect_model,
         editor_model=editor_model,
         effort=effort,
+        auto_checkpoint=auto_checkpoint,
         raw=merged,
         sources=sources,
     )
