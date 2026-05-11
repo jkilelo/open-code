@@ -364,9 +364,33 @@ def run_loop(
     verbose: bool = True,
     stream: bool = True,
     system_instruction: str = SYSTEM_INSTRUCTION,
+    fire_session_start: bool = False,
 ) -> tuple[int, dict[str, Any]]:
     """Run the agentic loop. Returns (exit_code, metrics)."""
+    import hooks  # local import; cycle-safe
+
     client = genai.Client(api_key=api_key)
+
+    # SessionStart hook: only on the FIRST entry into the loop for a
+    # session. cli.main / run_repl pass fire_session_start=True.
+    if fire_session_start and session is not None:
+        ssr = hooks.fire(
+            "SessionStart",
+            CONFIG.cwd,
+            session_id=session.id,
+            payload={
+                "project_dir": str(CONFIG.cwd),
+                "model": model,
+                "is_resume": bool(initial_history),
+                "prior_messages_count": len(initial_history or []),
+            },
+        )
+        if ssr.additional_context:
+            system_instruction = (
+                f"{system_instruction}\n\n## Additional context from "
+                f"SessionStart hooks ({', '.join(ssr.invoked)})\n\n"
+                f"{ssr.additional_context}"
+            )
 
     tools = [types.Tool(function_declarations=TOOL_DECLARATIONS)]
     config = types.GenerateContentConfig(
@@ -489,6 +513,30 @@ def run_loop(
                     if verbose:
                         print(_render_tool_call(name, args), file=sys.stderr)
 
+                    pre = hooks.fire(
+                        "PreToolUse",
+                        CONFIG.cwd,
+                        session_id=(session.id if session else ""),
+                        payload={"tool": name, "args": args},
+                    )
+                    if pre.block:
+                        result = {"ok": False, "error": f"blocked by hook: {pre.reason}"}
+                        metrics["tool_errors"] += 1
+                        if verbose:
+                            print(_render_tool_result(name, result), file=sys.stderr)
+                        if store is not None and session is not None:
+                            store.append_tool_refusal(
+                                session, tool=name,
+                                reason=f"hook block: {pre.reason}",
+                                args_snippet=_short(json.dumps(args), 200),
+                            )
+                        tool_result_parts.append(
+                            types.Part.from_function_response(name=name, response=result)
+                        )
+                        continue
+                    if pre.modified_args:
+                        args = pre.modified_args
+
                     fn = TOOL_FUNCTIONS.get(name)
                     if fn is None:
                         result = {"ok": False, "error": f"unknown tool: {name}"}
@@ -514,6 +562,13 @@ def run_loop(
                     if verbose:
                         print(_render_tool_result(name, result), file=sys.stderr)
 
+                    hooks.fire(
+                        "PostToolUse",
+                        CONFIG.cwd,
+                        session_id=(session.id if session else ""),
+                        payload={"tool": name, "args": args, "result": result},
+                    )
+
                     tool_result_parts.append(
                         types.Part.from_function_response(name=name, response=result)
                     )
@@ -524,7 +579,30 @@ def run_loop(
                     store.append_message(session, tool_content)
                 continue
 
-            # No function calls â€” model finished.
+            # No function calls. Give Stop hooks a chance to soft-block.
+            last_text = ""
+            if model_content.parts:
+                first_part = model_content.parts[0]
+                last_text = getattr(first_part, "text", None) or ""
+            stop = hooks.fire(
+                "Stop",
+                CONFIG.cwd,
+                session_id=(session.id if session else ""),
+                payload={"last_message": last_text},
+            )
+            if stop.block:
+                if verbose:
+                    print(
+                        f"[Stop hook requested continuation: {stop.reason}]",
+                        file=sys.stderr,
+                    )
+                continuation = _new_user_content(
+                    f"[Stop hook requested continuation: {stop.reason}]"
+                )
+                history.append(continuation)
+                if store is not None and session is not None:
+                    store.append_message(session, continuation)
+                continue
             break
     finally:
         metrics["wall_seconds"] = time.perf_counter() - t_start
@@ -698,8 +776,22 @@ def run_repl(
             print(f"unknown command: /{cmd}. /help for the list.")
             continue
 
-        # Otherwise it's a task. Expand @-file refs, then run one loop.
-        task_expanded, refs = expand_file_refs(line, cwd)
+        # UserPromptSubmit hook: can transform or block the prompt.
+        import hooks as _hooks
+        ups = _hooks.fire(
+            "UserPromptSubmit",
+            cwd,
+            session_id=session.id,
+            payload={"prompt": line},
+        )
+        if ups.block:
+            print(f"[UserPromptSubmit hook blocked: {ups.reason}]",
+                  file=sys.stderr)
+            continue
+        effective_prompt = ups.transformed_prompt if ups.transformed_prompt else line
+
+        # Expand @-file refs, then run one loop.
+        task_expanded, refs = expand_file_refs(effective_prompt, cwd)
         if refs and not quiet:
             print(
                 f"[expanded {len(refs)} @-file reference(s): "
@@ -707,6 +799,8 @@ def run_repl(
                 file=sys.stderr,
             )
 
+        # First REPL turn fires SessionStart through run_loop.
+        is_first_turn = not history
         try:
             exit_code, metrics = run_loop(
                 task=task_expanded,
@@ -719,6 +813,7 @@ def run_repl(
                 verbose=not quiet,
                 stream=stream,
                 system_instruction=system_instruction,
+                fire_session_start=is_first_turn,
             )
         except KeyboardInterrupt:
             print("\n[interrupted; returning to prompt]", file=sys.stderr)

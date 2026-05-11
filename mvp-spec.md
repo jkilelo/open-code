@@ -1,3 +1,27 @@
+# MVP spec — v0.5.0 (Hooks)
+
+> v0.5.0 (2026-05-10) implements Tier 1 #1 from
+> `roadmap/PROMPT-PACK.md`: a Claude Code-style hooks system.
+>
+> Plus pre-commit refactor: `cli.py` extracted (open_code.py
+> 970 → 751; cli.py = 273).
+>
+> New file: `hooks.py` (216 lines).
+>
+> ## v0.5 new assertions
+>
+> A12 PreToolUse hook returning exit 2 prevents the tool call and
+> returns the reason to the model as a tool result error.
+> A13 PostToolUse hook receives `{tool, args, result}` on stdin
+> after every tool call; never blocks the agent loop.
+> A14 SessionStart hook stdout `{"additionalContext": "..."}`
+> is appended to the system instruction for the rest of the
+> session.
+> A15 UserPromptSubmit hook stdout `{"transformedPrompt": "..."}`
+> replaces the prompt before @-file expansion in REPL.
+> A16 Stop hook exit 2 forces another iter by appending a
+> "[Stop hook requested continuation]" user message.
+
 # MVP spec — v0.4.0 (extends v0.3.0)
 
 > v0.4.0 (2026-05-10) brings three high-impact Claude-Code-style

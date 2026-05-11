@@ -84,6 +84,17 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 ---
 
+## v0.5.0 — 2026-05-10 (cli.py extraction + #1 Hooks)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| - | cli.py extraction (v0.4 pre-commit) | ✅ | open_code 970→751; cli 273; all probes pass |
+| **#1** | **Hooks system** (PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit) | ✅ | `tests/probe_hooks.py` 9/9 PASS; live: 3 blocked run_shell calls + SessionStart context bleeds into model's final response |
+
+**v0.5.0 ships 🟢.**
+
+---
+
 ## Carried gaps (still ⚪)
 
 - ⚪ Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save)

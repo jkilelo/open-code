@@ -241,6 +241,7 @@ def main(argv: list[str] | None = None) -> int:
         verbose=not args.quiet,
         stream=not args.no_stream,
         system_instruction=system_instruction,
+        fire_session_start=True,
     )
 
     if args.show_metrics:
