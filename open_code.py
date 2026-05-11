@@ -352,6 +352,88 @@ def _stream_iter_response(
     return all_parts, function_calls, usage
 
 
+def _handle_delegate_call(
+    args: dict[str, Any], *,
+    parent_session,
+    store,
+    api_key: str,
+    default_model: str,
+    cwd: Path,
+    system_instruction: str,
+    settings,
+) -> dict[str, Any]:
+    """Execute the `delegate` tool. Returns a normal tool-result dict."""
+    import subagents as _subagents
+    if parent_session is None or store is None:
+        return {"ok": False,
+                "error": "delegate requires an active session (got None)"}
+    agent_name = (args.get("agent") or "").strip()
+    sub_task = (args.get("task") or "").strip()
+    if not agent_name or not sub_task:
+        return {"ok": False,
+                "error": "delegate requires both 'agent' and 'task' args"}
+    agent = _subagents.find_agent_by_name(cwd, agent_name)
+    if agent is None:
+        return {"ok": False,
+                "error": (f"no agent named {agent_name!r} under "
+                          f".open-code/agents/")}
+    sub_model = agent.model or default_model
+    sub_session = _subagents.open_subagent_transcript(
+        parent_session, agent_name=agent_name, task=sub_task, model=sub_model,
+    )
+    # Compose subagent system instruction (replace, don't append the
+    # main SYSTEM_INSTRUCTION — the agent definition is authoritative).
+    sub_system = (
+        f"{SYSTEM_INSTRUCTION}\n\n## Subagent role: {agent.name}\n\n"
+        f"{agent.system_prompt}\n\nYour task: {sub_task}"
+    )
+    try:
+        exit_code, _metrics = run_loop(
+            task=sub_task, model=sub_model, api_key=api_key,
+            max_iterations=_subagents.DEFAULT_SUBAGENT_MAX_ITERATIONS,
+            store=store, session=sub_session, initial_history=[],
+            verbose=False, stream=False,
+            system_instruction=sub_system,
+            settings=settings, is_repl=False,
+            fire_session_start=False,
+            tool_allowlist=(agent.allowed_tools or None),
+            expose_delegate=False,  # no recursion
+        )
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"subagent crashed: {type(exc).__name__}: {exc}"}
+    # Extract subagent's final model text
+    summary = ""
+    try:
+        with sub_session.path.open("r", encoding="utf-8") as f:
+            for L in f:
+                try:
+                    ev = json.loads(L)
+                except Exception:
+                    continue
+                if ev.get("kind") == "msg" and ev.get("role") == "model":
+                    tps = [p.get("text", "") for p in ev.get("parts", [])
+                           if p.get("type") == "text"]
+                    if tps:
+                        summary = "\n".join(tps)
+    except OSError:
+        pass
+    _subagents.append_delegate_event(
+        parent_session, agent_name=agent_name, task=sub_task,
+        subagent_session_id=sub_session.id,
+        transcript_path=sub_session.path,
+        summary=summary, exit_code=exit_code,
+    )
+    return {
+        "ok": exit_code == 0,
+        "agent": agent_name,
+        "subagent_session_id": sub_session.id,
+        "transcript_path": str(sub_session.path),
+        "summary": summary or "(no summary produced)",
+        "exit_code": exit_code,
+    }
+
+
 def run_loop(
     *,
     task: str,
@@ -367,10 +449,13 @@ def run_loop(
     fire_session_start: bool = False,
     settings=None,  # type: ignore[no-untyped-def]  -- imported from settings.py in cli.main
     is_repl: bool = False,
+    tool_allowlist: list[str] | None = None,
+    expose_delegate: bool = True,
 ) -> tuple[int, dict[str, Any]]:
     """Run the agentic loop. Returns (exit_code, metrics)."""
     import hooks  # local import; cycle-safe
     from settings import Settings, evaluate_permission
+    import subagents as _subagents
 
     if settings is None:
         settings = Settings()
@@ -398,7 +483,17 @@ def run_loop(
                 f"{ssr.additional_context}"
             )
 
-    tools = [types.Tool(function_declarations=TOOL_DECLARATIONS)]
+    # Build the effective TOOL_DECLARATIONS list:
+    # - Apply tool_allowlist if provided (subagent restriction)
+    # - Append the delegate tool unless we're a subagent (no recursion)
+    effective_decls: list[dict[str, Any]] = []
+    for decl in TOOL_DECLARATIONS:
+        if tool_allowlist is None or decl["name"] in tool_allowlist:
+            effective_decls.append(decl)
+    if expose_delegate:
+        effective_decls.append(_subagents.DELEGATE_TOOL_DECLARATION)
+
+    tools = [types.Tool(function_declarations=effective_decls)]
     config = types.GenerateContentConfig(
         tools=tools,
         system_instruction=system_instruction,
@@ -632,7 +727,15 @@ def run_loop(
                         args = pre.modified_args
 
                     fn = TOOL_FUNCTIONS.get(name)
-                    if fn is None:
+                    if name == "delegate":
+                        # Special-cased: needs run_loop access + parent state.
+                        result = _handle_delegate_call(
+                            args, parent_session=session, store=store,
+                            api_key=api_key, default_model=current_model,
+                            cwd=CONFIG.cwd, system_instruction=system_instruction,
+                            settings=settings,
+                        )
+                    elif fn is None:
                         result = {"ok": False, "error": f"unknown tool: {name}"}
                     else:
                         try:

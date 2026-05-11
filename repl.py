@@ -42,6 +42,7 @@ Slash commands:
   /dump              print the path of the JSONL transcript
   /skills            list skills under .open-code/skills/
   /skill <n> [args]  run a skill by name; $ARGUMENTS / $1.. interpolated
+  /agents            list subagents under .open-code/agents/ (use via the delegate tool)
   /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
   /plan <task>       run <task> in plan mode (read-only); save result as a plan event
   /act [task]        load most recent plan; switch to acceptEdits; execute
@@ -174,6 +175,10 @@ def run_repl(
             if cmd == "skills":
                 import skills as _skills
                 print(_skills.render_skill_listing(_skills.discover_skills(cwd)))
+                continue
+            if cmd == "agents":
+                import subagents as _subagents
+                print(_subagents.render_agent_listing(_subagents.discover_agents(cwd)))
                 continue
             if cmd == "plan":
                 if not rest:

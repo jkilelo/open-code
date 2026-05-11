@@ -144,6 +144,16 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 **v0.10.0 ships 🟢.** 6 of 10 Tier 1 features done.
 
+---
+
+## v0.11.0 — 2026-05-11 (#4 Subagents / Task tool)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#4** | **Subagents / Task tool** (`.open-code/agents/<name>.md` definitions + `delegate(agent, task)` tool + isolated transcripts at `<parent>.subagent.<n>.jsonl` + restricted tool allowlist + no recursion) | ✅ | `tests/probe_subagents.py` 8/8; live: main delegates to `counter` agent → subagent calls `list_dir` (allowed) → returns "There are 3 .txt files (a.txt, b.txt, c.txt)" → parent records `delegate` event with transcript pointer |
+
+**v0.11.0 ships 🟢.** 7 of 10 Tier 1 features done. **Batch A complete.**
+
 ## Tier 1 status
 
 | # | Feature | Status |
