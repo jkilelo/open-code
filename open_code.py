@@ -82,6 +82,23 @@ from tools import (
 DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
 
 
+# Effort levels map to a Gemini thinking_budget. Larger budget = more
+# reasoning tokens. Models that don't support reasoning ignore this
+# silently, so it's safe to send on any model.
+EFFORT_BUDGETS: dict[str, int] = {
+    "low":    0,
+    "medium": 512,
+    "high":   4096,
+    "xhigh":  16384,
+}
+DEFAULT_EFFORT = "medium"
+
+# Marker string the model author can drop in a prompt for a one-turn
+# budget override. Detected case-insensitively at word boundaries.
+ULTRATHINK_MARKER = "ultrathink"
+ULTRATHINK_BUDGET = 32768
+
+
 # Module-level MCP client handle, set by cli.main when servers are
 # configured. run_loop reads it to surface mcp__* tools and route calls.
 _MCP_CLIENT = None
@@ -104,9 +121,13 @@ DEFAULT_OC_ROOT = Path.home() / ".open-code"
 MAX_FILE_REF_BYTES = 200_000
 
 # OPEN_CODE.md is the project-context file (Claude Code's CLAUDE.md analog).
-# Walking up parents lets a monorepo set context once at the root.
+# v0.15+: four-tier memory model (Gemini CLI pattern) — global +
+# ancestors + project + private. All four are concatenated in order.
 PROJECT_CONTEXT_FILENAME = "OPEN_CODE.md"
-MAX_PROJECT_CONTEXT_BYTES = 50_000
+PRIVATE_MEMORY_REL = ".open-code/MEMORY.md"
+GLOBAL_MEMORY_PATH = Path.home() / ".open-code" / "OPEN_CODE.md"
+MAX_PROJECT_CONTEXT_BYTES = 100_000  # raised from 50KB now that we layer
+MAX_PER_LAYER_BYTES = 30_000
 
 # Default cap on history loaded by --resume. Prevents unbounded token bloat
 # after many turns in one CWD.
@@ -193,30 +214,79 @@ def _is_model_unavailable_error(exc: Exception) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def load_project_context(cwd: Path) -> tuple[str, Path | None]:
-    """Walk up from cwd looking for OPEN_CODE.md; return (content, path).
+def _read_capped(path: Path) -> str:
+    """Read a file, cap at MAX_PER_LAYER_BYTES, return "" on error."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    if len(text) > MAX_PER_LAYER_BYTES:
+        text = text[:MAX_PER_LAYER_BYTES] + "\n[...truncated]"
+    return text
 
-    First match wins. Truncates at MAX_PROJECT_CONTEXT_BYTES. Returns
-    ("", None) if no file found.
+
+def load_project_context(cwd: Path) -> tuple[str, Path | None]:
+    """Back-compat shim — returns (concatenated, first_path) for callers
+    that want the legacy `(text, path)` shape. New code should call
+    `load_project_layers(cwd)` directly."""
+    layers = load_project_layers(cwd)
+    if not layers:
+        return "", None
+    joined = "\n\n".join(c for _p, c in layers)
+    if len(joined) > MAX_PROJECT_CONTEXT_BYTES:
+        joined = joined[:MAX_PROJECT_CONTEXT_BYTES] + "\n[...truncated]"
+    return joined, layers[0][0]
+
+
+def load_project_layers(cwd: Path) -> list[tuple[Path, str]]:
+    """Four-tier memory model (Gemini CLI / Aider pattern):
+
+      1. ~/.open-code/OPEN_CODE.md          (global personal defaults)
+      2. each ancestor's OPEN_CODE.md, top-down (monorepo roots)
+      3. <cwd>/OPEN_CODE.md                 (project, committed)
+      4. <cwd>/.open-code/MEMORY.md         (private/uncommitted)
+
+    Returns the layers as ordered (path, content) pairs. Missing files
+    are silently skipped. Each layer is capped at MAX_PER_LAYER_BYTES.
     """
+    out: list[tuple[Path, str]] = []
+    # Tier 1: global
+    if GLOBAL_MEMORY_PATH.exists() and GLOBAL_MEMORY_PATH.is_file():
+        text = _read_capped(GLOBAL_MEMORY_PATH)
+        if text:
+            out.append((GLOBAL_MEMORY_PATH, text))
+    # Tier 2: ancestors of cwd (top-down, EXCLUDING cwd itself)
     current = cwd.resolve()
-    while True:
-        candidate = current / PROJECT_CONTEXT_FILENAME
-        if candidate.exists() and candidate.is_file():
-            try:
-                text = candidate.read_text(encoding="utf-8", errors="replace")
-                if len(text) > MAX_PROJECT_CONTEXT_BYTES:
-                    text = text[:MAX_PROJECT_CONTEXT_BYTES] + "\n[...truncated]"
-                return text, candidate
-            except OSError:
-                return "", None
-        if current.parent == current:
-            return "", None
+    ancestors: list[Path] = []
+    while current.parent != current:
         current = current.parent
+        ancestors.append(current)
+    for anc in reversed(ancestors):  # top-down: /, /home, /home/jeff, ...
+        candidate = anc / PROJECT_CONTEXT_FILENAME
+        if candidate.exists() and candidate.is_file():
+            text = _read_capped(candidate)
+            if text:
+                out.append((candidate, text))
+    # Tier 3: project
+    proj = cwd.resolve() / PROJECT_CONTEXT_FILENAME
+    if proj.exists() and proj.is_file():
+        text = _read_capped(proj)
+        if text:
+            out.append((proj, text))
+    # Tier 4: private
+    priv = cwd.resolve() / PRIVATE_MEMORY_REL
+    if priv.exists() and priv.is_file():
+        text = _read_capped(priv)
+        if text:
+            out.append((priv, text))
+    return out
 
 
 def build_system_instruction(project_context: str, project_path: Path | None) -> str:
-    """Augment the base SYSTEM_INSTRUCTION with OPEN_CODE.md content if any."""
+    """Augment SYSTEM_INSTRUCTION with project context (legacy shape).
+
+    Prefer `build_system_instruction_layered(layers)` for v0.15+.
+    """
     if not project_context:
         return SYSTEM_INSTRUCTION
     header = (
@@ -224,6 +294,16 @@ def build_system_instruction(project_context: str, project_path: Path | None) ->
         if project_path else "\n\n## Project context\n\n"
     )
     return SYSTEM_INSTRUCTION + header + project_context
+
+
+def build_system_instruction_layered(layers: list[tuple[Path, str]]) -> str:
+    """Concatenate all four memory tiers under labeled section headers."""
+    if not layers:
+        return SYSTEM_INSTRUCTION
+    parts = [SYSTEM_INSTRUCTION]
+    for path, text in layers:
+        parts.append(f"\n\n## Project context from {path}\n\n{text}")
+    return "".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -513,10 +593,36 @@ def run_loop(
             effective_decls.append(d)
 
     tools = [types.Tool(function_declarations=effective_decls)]
-    config = types.GenerateContentConfig(
-        tools=tools,
-        system_instruction=system_instruction,
+
+    # Effort level → thinking_budget. `ultrathink` in the user's task
+    # bumps THIS turn's budget to the max (then we strip it from the
+    # prompt the model sees).
+    base_budget = EFFORT_BUDGETS.get(
+        getattr(settings, "effort", DEFAULT_EFFORT), EFFORT_BUDGETS[DEFAULT_EFFORT]
     )
+    one_shot_ultrathink = False
+    if re.search(r"\b" + re.escape(ULTRATHINK_MARKER) + r"\b", task, flags=re.I):
+        one_shot_ultrathink = True
+        task = re.sub(
+            r"\b" + re.escape(ULTRATHINK_MARKER) + r"\b", "", task, flags=re.I
+        ).strip()
+
+    def _build_config(turn_budget: int):
+        cfg_kwargs: dict[str, Any] = {
+            "tools": tools,
+            "system_instruction": system_instruction,
+        }
+        try:
+            # Older SDK versions might not have ThinkingConfig; guard.
+            tc_cls = getattr(types, "ThinkingConfig", None)
+            if tc_cls is not None and turn_budget > 0:
+                cfg_kwargs["thinking_config"] = tc_cls(thinking_budget=turn_budget)
+        except Exception:
+            pass
+        return types.GenerateContentConfig(**cfg_kwargs)
+
+    initial_budget = ULTRATHINK_BUDGET if one_shot_ultrathink else base_budget
+    config = _build_config(initial_budget)
 
     history: list[types.Content] = list(initial_history or [])
     user_msg = _new_user_content(task)
@@ -622,6 +728,17 @@ def run_loop(
                 store.append_metrics(
                     session, iteration=iteration, model=current_model,
                     input_tok=input_tok, output_tok=output_tok,
+                )
+
+            # Status line (Tier 2 #14). Enabled when settings.statusline_template
+            # is set, OR when verbose is True AND CONFIG.statusline_on
+            # is True (set by --statusline).
+            if verbose and getattr(CONFIG, "statusline_on", False):
+                sys.stderr.write(
+                    f"  [model={current_model} effort={getattr(settings, 'effort', '?')}"
+                    f" iter={iteration} in_tok={metrics['total_input_tokens']}"
+                    f" out_tok={metrics['total_output_tokens']}"
+                    f" tool_errs={metrics['tool_errors']}]\n"
                 )
 
             if function_calls:

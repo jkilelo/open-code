@@ -215,6 +215,19 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.14.2 ships 🟢.** Tier 1 honestly complete (this time honestly honest).
 
+---
+
+## v0.15.0 — 2026-05-11 (Tier 2 Batch A start: polish trio)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#14** | **Status line** (one-line stderr footer; `--statusline`) | ✅ bonus | live: `[model=... effort=high iter=2 in_tok=2973 out_tok=147 tool_errs=0]` each iter |
+| **#15** | **Effort levels** (`--effort low/medium/high/xhigh` → `thinking_budget`; `/effort` REPL; settings.effort) | ✅ | `tests/probe_tier2_polish.py` 8/8; effort=high visible in live status line |
+| **#16** | **Ultrathink** (in-prompt marker, word-boundary'd; one-turn budget override; stripped from prompt) | ✅ | probe verifies detection + stripping + `ultrathinker` not false-matched |
+| **#18** | **Four-tier project memory** (global → ancestors → project → private; concatenated under `## Project context from <path>` headers) | ✅ | live: 2 layers loaded; "Always include type hints" rule in OPEN_CODE.md propagated into model output (fizz.py had `n: int` and `-> None`) |
+
+**v0.15.0 ships 🟢.** Tier 2: 4 of 15 features done. Next: #13 `/compact` + #19 extended @-providers (rest of Batch A).
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

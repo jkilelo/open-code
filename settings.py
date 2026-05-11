@@ -50,6 +50,7 @@ class PermissionRules:
 
 
 VALID_MODES = ("default", "acceptEdits", "plan", "auto", "bypassPermissions")
+VALID_EFFORTS = ("low", "medium", "high", "xhigh")
 
 
 @dataclass
@@ -66,6 +67,10 @@ class Settings:
     # `model` (or the REPL's current_model) when None.
     architect_model: str | None = None
     editor_model: str | None = None
+    # Effort level (Claude Code-style). Maps to a thinking_budget in
+    # the Gemini config. "medium" is the default; "low"=0 thinking,
+    # "high"=4096, "xhigh"=16384.
+    effort: str = "medium"
     raw: dict[str, Any] = field(default_factory=dict)
     # Per-file paths that contributed (for diagnostics)
     sources: list[Path] = field(default_factory=list)
@@ -149,6 +154,9 @@ def load_layered_settings(cwd: Path) -> Settings:
     if not isinstance(editor_model, str):
         editor_model = None
 
+    effort_raw = merged.get("effort")
+    effort = effort_raw if isinstance(effort_raw, str) and effort_raw in VALID_EFFORTS else "medium"
+
     return Settings(
         model=merged.get("model") if isinstance(merged.get("model"), str) else None,
         max_iterations=(merged.get("max_iterations")
@@ -159,6 +167,7 @@ def load_layered_settings(cwd: Path) -> Settings:
         mode=mode,
         architect_model=architect_model,
         editor_model=editor_model,
+        effort=effort,
         raw=merged,
         sources=sources,
     )

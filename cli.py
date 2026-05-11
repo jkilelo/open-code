@@ -127,6 +127,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable all hook execution for this invocation.",
     )
     parser.add_argument(
+        "--effort",
+        choices=("low", "medium", "high", "xhigh"),
+        default=None,
+        help=(
+            "Reasoning effort level. Maps to a thinking_budget passed "
+            "to the model (low=0, medium=512, high=4096, xhigh=16384). "
+            "Models that don't support reasoning ignore this."
+        ),
+    )
+    parser.add_argument(
+        "--statusline",
+        action="store_true",
+        help="Emit a one-line status footer to stderr after each iter "
+             "(model / iter / tokens / refusals).",
+    )
+    parser.add_argument(
         "--root",
         default=os.environ.get("OPEN_CODE_ROOT", str(DEFAULT_OC_ROOT)),
         help=f"Sessions root dir (default: {DEFAULT_OC_ROOT}).",
@@ -172,8 +188,8 @@ def main(argv: list[str] | None = None) -> int:
     # so we defer to avoid a cycle at module-load time.
     from open_code import (
         run_loop,
-        load_project_context,
-        build_system_instruction,
+        load_project_layers,
+        build_system_instruction_layered,
         expand_file_refs,
         set_mcp_client,
     )
@@ -187,6 +203,8 @@ def main(argv: list[str] | None = None) -> int:
     CONFIG.cwd = cwd
     CONFIG.allow_outside_cwd = args.allow_outside_cwd
     CONFIG.allow_dangerous = args.allow_dangerous
+    # Tier 2 #14: status-line toggle (off by default)
+    CONFIG.statusline_on = args.statusline  # type: ignore[attr-defined]
 
     # Layered settings: ~/.open-code → project → project-local.
     # CLI flags + env vars STILL win (already applied above).
@@ -198,6 +216,8 @@ def main(argv: list[str] | None = None) -> int:
         settings.architect_model = args.architect
     if args.editor is not None:
         settings.editor_model = args.editor
+    if args.effort is not None:
+        settings.effort = args.effort
 
     # Start any MCP servers declared in settings.json
     mcp_client: MCPClient | None = None
@@ -271,10 +291,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    project_ctx, project_path = load_project_context(cwd)
-    system_instruction = build_system_instruction(project_ctx, project_path)
-    if project_path and not args.quiet:
-        print(f"[loaded {project_path} as project context]", file=sys.stderr)
+    layers = load_project_layers(cwd)
+    system_instruction = build_system_instruction_layered(layers)
+    if layers and not args.quiet:
+        print(
+            f"[loaded {len(layers)} project-context layer(s): "
+            f"{', '.join(str(p) for p, _ in layers)}]",
+            file=sys.stderr,
+        )
 
     # Repo-map: append a symbol skeleton (Aider-style, Python only in v0.13)
     if not args.no_repomap:

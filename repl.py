@@ -294,6 +294,22 @@ def run_repl(
                 if metrics.get("model") and metrics["model"] != current_model:
                     current_model = metrics["model"]
                 continue
+            if cmd == "effort":
+                from settings import VALID_EFFORTS, Settings as _S
+                if settings is None:
+                    settings = _S()
+                if not rest:
+                    print(
+                        f"current effort: {settings.effort}"
+                        f"\nvalid: {', '.join(VALID_EFFORTS)}"
+                    )
+                    continue
+                if rest not in VALID_EFFORTS:
+                    print(f"unknown effort {rest!r}; valid: {', '.join(VALID_EFFORTS)}")
+                    continue
+                settings.effort = rest
+                print(f"[effort set to {rest!r}]")
+                continue
             if cmd == "mode":
                 from settings import VALID_MODES
                 if not rest:
