@@ -1,0 +1,11 @@
+{
+  "name": "persona-mvp-kit",
+  "description": "Persona-driven MVP development: enforces persona extraction before code, smallest end-to-end slice, brutal honest review against real systems, and root-cause fixes (not symptom bandages). Ships skills + subagents + hooks + path-scoped rules + slash commands.",
+  "version": "0.2.0",
+  "author": {
+    "name": "persona-mvp-kit contributors"
+  },
+  "homepage": "https://github.com/jkilelo/ai_agents/tree/main/persona-mvp-kit",
+  "repository": "https://github.com/jkilelo/ai_agents",
+  "license": "MIT"
+}

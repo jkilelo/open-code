@@ -1,0 +1,41 @@
+{
+  "_comment": "MCP server template for persona-mvp-kit projects. Rename to .mcp.json after editing. Default to GitHub only — every other MCP server should be added when a persona's workflow needs it. Per the kit standard: dependencies are persona-justified, not speculative.",
+
+  "mcpServers": {
+    "github": {
+      "_comment": "Useful for any project that has GitHub issues/PRs the persona references. Most personas in real projects do.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  },
+
+  "_examples_uncomment_when_persona_needs_them": {
+
+    "memory": {
+      "_comment": "Persistent knowledge graph across sessions — complements Claude Code's auto-memory MEMORY.md. Use when patterns the kit discovers (e.g. 'Sarah's brief workflow has these 5 stages') should accumulate across MANY projects, not just one. Pair with auto-memory in ~/.claude/projects/<project>/memory/ which is per-project.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+
+    "filesystem": {
+      "_comment": "Safe read-only filesystem browsing of an external directory. Use only when persona's workflow involves reading from a location outside the project root.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/external/docs"]
+    },
+
+    "postgres": {
+      "_comment": "Read-only Postgres queries. Use when a persona's workflow involves analyzing a database the project doesn't own.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://user:pass@host/db"]
+    },
+
+    "playwright": {
+      "_comment": "Browser automation for screenshot-based UI verification. Use when persona's success criterion requires visual checks.",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp"]
+    }
+  }
+}

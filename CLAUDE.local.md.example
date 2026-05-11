@@ -1,0 +1,48 @@
+# CLAUDE.local.md — personal overrides
+
+> Copy this file to `CLAUDE.local.md` (without `.example`) and edit.
+> Add `CLAUDE.local.md` to your `.gitignore` so it stays personal.
+> Per the kit standard: `personas.md` and `mvp-spec.md` are
+> team-shared. `CLAUDE.local.md` is yours.
+
+## Personal sandbox + test data
+
+```
+# Example — edit for your machine
+SANDBOX_URL=http://localhost:8080
+TEST_USER=alice@example.com
+TEST_API_KEY=<see ~/.env-personal>
+```
+
+Reference these in conversation: "use my sandbox URL" → Claude
+reads this file and substitutes.
+
+## Personal preferences
+
+```
+- I prefer pnpm over npm. Don't use npm install in my sessions.
+- My editor is helix; if you suggest editor commands, suggest helix
+  bindings.
+- I review PRs on phone; keep PR descriptions under 200 chars.
+```
+
+## Personal aliases / shortcuts
+
+```
+- "rev" → "use the brutal-reviewer subagent on the current build"
+- "stop" → "block any code edit until I confirm — I'm planning"
+```
+
+## Notes from past sessions on this project
+
+(Optional. Add things Claude has corrected you on or learned about
+you that should persist. Or let auto-memory at
+`~/.claude/projects/<project>/memory/MEMORY.md` handle this
+automatically — see `methodology/CONTEXT-MANAGEMENT.md` § auto
+memory.)
+
+---
+
+**Remember:** add `CLAUDE.local.md` to `.gitignore`. The kit's
+`/init`-style setup does this automatically if you choose the
+"personal" option.

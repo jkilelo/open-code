@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "persona-mvp-kit project settings. Hooks deterministically enforce the kit's bright lines. Permissions are conservative. autoMode.hard_deny absolutely blocks destructive commands. statusLine shows kit state at all times.",
+
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git branch*)",
+      "Bash(ls*)",
+      "Bash(find*)",
+      "Bash(cat*)",
+      "Bash(pwd)",
+      "Bash(test*)"
+    ],
+    "ask": [
+      "Write",
+      "Edit",
+      "Bash",
+      "Edit(personas.md)",
+      "Edit(mvp-spec.md)"
+    ],
+    "_comment_personas_in_ask": "personas.md and mvp-spec.md must be EDITABLE (the kit's workflow evolves them) but every edit should prompt the user for confirmation. They are NOT denied; they are explicitly in `ask` to make the prompt unavoidable.",
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(sudo*)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Edit(package-lock.json)",
+      "Edit(.git/**)"
+    ]
+  },
+
+  "_comment_autoMode": "Auto mode config (v2.1.114+). `$defaults` token composes with the built-in classifier rules instead of replacing them (week 17 feature). hard_deny is unconditional, even with allow exceptions (v2.1.128+).",
+  "autoMode": {
+    "allow": [
+      "$defaults"
+    ],
+    "soft_deny": [
+      "$defaults"
+    ],
+    "hard_deny": [
+      "Bash(rm -rf*)",
+      "Bash(sudo*)",
+      "Bash(curl*|*sh)",
+      "Bash(wget*|*sh)",
+      "Bash(dd if=*)",
+      "Bash(mkfs*)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Edit(personas.md)",
+      "Edit(mvp-spec.md)"
+    ]
+  },
+
+  "_comment_statusLine": "Bottom-of-screen status bar showing kit state: personas/spec/runs/gap-log/branch.",
+  "statusLine": {
+    "type": "command",
+    "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/statusline.sh"
+  },
+
+  "_comment_subagentStatusLine": "When a subagent runs, show which one. Substitutes {subagent_name} at render time.",
+  "subagentStatusLine": "🔧 {subagent_name}",
+
+  "_comment_attribution": "Auto-include kit + persona attribution in every commit and PR Claude creates. Customize via $PERSONA env var or edit at run time.",
+  "attribution": {
+    "commit": "🤖 Generated under persona-mvp-kit\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+    "pr": "🤖 Generated under persona-mvp-kit"
+  },
+
+  "_comment_includeGitInstructions": "Tell Claude to follow git conventions from CLAUDE.md (it should know without this; reinforces).",
+  "includeGitInstructions": true,
+
+  "_comment_spinnerTipsOverride": "Kit-specific reminders shown during spinners. Reinforces the bright lines while Claude is thinking.",
+  "spinnerTipsOverride": {
+    "excludeDefault": false,
+    "tips": [
+      "Did you verify personas.md is user-confirmed?",
+      "Is the mvp-spec.md success criterion concrete + measurable?",
+      "Did you run the workflow as the persona before claiming done?",
+      "Is the fix at root cause, or is it a symptom bandage?",
+      "Will the persona use this tomorrow morning over their current workflow?"
+    ]
+  },
+
+  "_comment_autoMemory": "Auto-memory location. Default per-project; kit doesn't override. Mention in INSTALL.md.",
+
+  "_comment_disableSkillShellExecution": "The kit's skills use `!shell` dynamic context injection. If you disable it, persona-driven-mvp / brutal-honest-review / run-the-workflow can't read live project state. Don't set this to true unless you're hardening for a hostile environment.",
+  "disableSkillShellExecution": false,
+
+  "_comment_hooks": "Five hook events register the kit's enforcement layer.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-personas.sh",
+            "statusMessage": "Checking persona-mvp-kit prerequisites..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/remind-gap-log.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-verification.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start-context.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-prompt-bypass.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
