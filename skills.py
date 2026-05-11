@@ -145,21 +145,35 @@ def load_skill_file(path: Path) -> Skill | None:
 
 
 def discover_skills(cwd: Path) -> list[Skill]:
-    """Find every SKILL.md under <cwd>/.open-code/skills/<name>/."""
+    """Find every SKILL.md under <cwd>/.open-code/skills/<name>/.
+
+    Tier 2 #22: also aggregates skills exposed by installed plugins.
+    Same-name local skill wins over a plugin's skill (project's own
+    files always take precedence).
+    """
     skills_root = cwd / SKILLS_REL
-    if not skills_root.exists() or not skills_root.is_dir():
-        return []
-    out: list[Skill] = []
-    for entry in sorted(skills_root.iterdir()):
-        if not entry.is_dir():
-            continue
-        candidate = entry / "SKILL.md"
-        if not candidate.exists():
-            continue
-        s = load_skill_file(candidate)
-        if s is not None:
-            out.append(s)
-    return out
+    by_name: dict[str, Skill] = {}
+    # Plugin-provided first; local overrides them later.
+    try:
+        import plugins as _plugins
+        for skill_md, _plugin in _plugins.list_plugin_skill_dirs(cwd):
+            s = load_skill_file(skill_md)
+            if s is not None:
+                by_name[s.name] = s
+    except Exception:
+        pass  # plugins module is optional; never block skill discovery
+    # Local skills
+    if skills_root.exists() and skills_root.is_dir():
+        for entry in sorted(skills_root.iterdir()):
+            if not entry.is_dir():
+                continue
+            candidate = entry / "SKILL.md"
+            if not candidate.exists():
+                continue
+            s = load_skill_file(candidate)
+            if s is not None:
+                by_name[s.name] = s
+    return sorted(by_name.values(), key=lambda s: s.name)
 
 
 def find_skill_by_name(cwd: Path, name: str) -> Skill | None:

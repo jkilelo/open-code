@@ -156,6 +156,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="List available output styles (built-in + user + project) and exit.",
     )
     parser.add_argument(
+        "--list-plugins",
+        action="store_true",
+        help="List installed plugins (Tier 2 #22) — project + user — and exit.",
+    )
+    parser.add_argument(
         "--auto-checkpoint",
         action="store_true",
         help="Take a shadow-git snapshot of the working tree at the "
@@ -255,6 +260,11 @@ def main(argv: list[str] | None = None) -> int:
         from output_styles import list_available
         for name, source in list_available(cwd):
             print(f"  {name:<20}  ({source})")
+        return 0
+
+    if args.list_plugins:
+        import plugins as _plugins
+        print(_plugins.render_plugin_listing(_plugins.discover_plugins(cwd)))
         return 0
     if args.print_json:
         # Implies --quiet and disables streaming so we emit one

@@ -309,6 +309,16 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.22.0 ships 🟢.** Tier 2: 13 of 15 features done. Two left: #22 plugins, #24 /loop+/schedule.
 
+---
+
+## v0.23.0 — 2026-05-11 (Tier 2 #22 — plugin system)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#22** | **Plugin system** (bundle of skills + agents + output styles; `plugin.json` manifest with `name/version/description/exposes`; install via `~/.open-code/plugins/<name>/` or `<cwd>/.open-code/plugins/<name>/`; precedence builtin<plugin<user<project; skills.discover_skills aggregates plugin skills; output_styles.list_available + resolve_overlay aggregate; `--list-plugins` CLI flag. **NOT** shipped: plugin hooks (trust gate work), plugin agent aggregation (same trust concern), marketplace) | ✅ | `tests/probe_plugins.py` 7/7: discover_plugins parses valid manifest, invalid/missing silently skipped, project overrides user same-name plugin, plugin-provided skill appears in discover_skills, local skill same name overrides plugin, plugin output style resolvable as `plugin:<name>`, project style still beats plugin style |
+
+**v0.23.0 ships 🟢.** Tier 2: 14 of 15 features done. **One left: #24 (/loop+/schedule).**
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

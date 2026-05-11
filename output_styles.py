@@ -66,13 +66,22 @@ PROJECT_STYLES_REL = ".open-code/output-styles"
 def list_available(cwd: Path) -> list[tuple[str, str]]:
     """Return (name, source) pairs for every discoverable style.
 
-    `source` is "builtin", "user", or "project" so callers can show
-    where each style came from.
+    `source` is "builtin", "plugin:<plugin-name>", "user", or
+    "project" so callers can show where each style came from.
+    Resolution precedence (lowest to highest): builtin -> plugin ->
+    user -> project. Later overrides earlier.
     """
     seen: dict[str, str] = {}
-    # Builtins win the name *unless* a more-specific location overrides.
     for name in BUILTIN_STYLES:
         seen[name] = "builtin"
+    # Tier 2 #22: plugin-provided styles. Loaded between builtins
+    # and user/project so users can still override.
+    try:
+        import plugins as _plugins
+        for style_name, _path, plugin in _plugins.list_plugin_output_styles(cwd):
+            seen[style_name] = f"plugin:{plugin.name}"
+    except Exception:
+        pass
     if USER_STYLES_DIR.exists():
         for f in USER_STYLES_DIR.glob("*.md"):
             seen[f.stem] = "user"
@@ -86,8 +95,8 @@ def list_available(cwd: Path) -> list[tuple[str, str]]:
 def resolve_overlay(style_name: str, cwd: Path) -> tuple[str, str]:
     """Resolve a style name to (overlay_text, source_label).
 
-    Resolution order: project file → user file → built-in → empty.
-    Returns ("", "default") for the bare "default" style.
+    Resolution order: project file → user file → plugin file → built-in
+    → empty.  Returns ("", "default") for the bare "default" style.
     """
     name = (style_name or "default").strip()
     if not name:
@@ -108,10 +117,21 @@ def resolve_overlay(style_name: str, cwd: Path) -> tuple[str, str]:
                     f"user:{user_file}")
         except OSError:
             pass
+    # Tier 2 #22 — plugin-provided
+    try:
+        import plugins as _plugins
+        for s_name, s_path, plugin in _plugins.list_plugin_output_styles(cwd):
+            if s_name == name:
+                try:
+                    return (s_path.read_text(encoding="utf-8").strip(),
+                            f"plugin:{plugin.name}")
+                except OSError:
+                    pass
+    except Exception:
+        pass
     # Built-in
     if name in BUILTIN_STYLES:
         return (BUILTIN_STYLES[name], f"builtin:{name}")
-    # Unknown name → no overlay (caller may want to warn)
     return ("", f"unknown:{name}")
 
 
