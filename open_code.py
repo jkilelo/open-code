@@ -501,6 +501,45 @@ def _render_tool_result(name: str, result: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _persist_sticky_rule(cwd: Path, tool: str) -> None:
+    """Persist a sticky `always` permission grant.
+
+    Writes a tool-name allow rule to `<cwd>/.open-code/settings.local.json`
+    (the gitignored per-machine layer). Caller is responsible for handling
+    OSError / JSONDecodeError that bubble up — this helper raises rather
+    than silently failing so the user sees the problem.
+    """
+    settings_dir = cwd / ".open-code"
+    settings_dir.mkdir(parents=True, exist_ok=True)
+    settings_file = settings_dir / "settings.local.json"
+    data: dict[str, Any] = {}
+    if settings_file.exists():
+        try:
+            data = json.loads(settings_file.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                data = {}
+        except json.JSONDecodeError:
+            # Don't clobber a hand-edited file with garbage; bail loudly.
+            raise RuntimeError(
+                f"{settings_file} is not valid JSON; refusing to overwrite"
+            )
+    perms = data.setdefault("permissions", {})
+    if not isinstance(perms, dict):
+        perms = {}
+        data["permissions"] = perms
+    # Write to `always_allow` so the new rule wins over higher-layer
+    # `ask` rules; see settings.evaluate_permission ordering.
+    always_list = perms.setdefault("always_allow", [])
+    if not isinstance(always_list, list):
+        always_list = []
+        perms["always_allow"] = always_list
+    if tool not in always_list:
+        always_list.append(tool)
+    settings_file.write_text(
+        json.dumps(data, indent=2) + "\n", encoding="utf-8",
+    )
+
+
 def _new_user_content(text: str) -> types.Content:
     return types.Content(role="user", parts=[types.Part.from_text(text=text)])
 
@@ -895,6 +934,15 @@ def run_loop(
                         )
                         if settings.mode == "acceptEdits" and name == "write_file" and d0 == "ask":
                             decision, why = ("allow", f"{w0} (acceptEdits)")
+                        elif d0 == "ask" and name in getattr(
+                                settings, "_sticky_allow", set()):
+                            # Tier 2 #17 — sticky session permissions.
+                            # The user said "allow this session" earlier;
+                            # skip the prompt without persisting to disk.
+                            decision, why = (
+                                "allow",
+                                f"{w0} (sticky-session: tool {name!r})",
+                            )
                         else:
                             decision, why = (d0, w0)
                     if decision == "deny":
@@ -931,15 +979,56 @@ def run_loop(
                                 types.Part.from_function_response(name=name, response=result)
                             )
                             continue
-                        # REPL: prompt user
+                        # REPL: prompt user.
+                        # Tier 2 #17 — sticky permissions:
+                        #   y = allow once
+                        #   s = sticky-session (allow this tool until /clear)
+                        #   a = always (persist tool allow-rule to settings)
+                        #   n = deny
                         try:
                             ans = input(
                                 f"  ? {name}({_short(json.dumps(args), 60)}) "
-                                f"[allow/deny] (y/n): "
+                                f"[y=once / s=session / a=always / n=no]: "
                             ).strip().lower()
                         except EOFError:
                             ans = "n"
-                        if not ans.startswith("y"):
+                        sticky_choice = ans.startswith("s")
+                        always_choice = ans.startswith("a")
+                        if sticky_choice:
+                            # Lazy-init the set; lives on `settings` so it
+                            # persists for the REPL session (one Settings
+                            # instance per `run_repl`).
+                            if not hasattr(settings, "_sticky_allow"):
+                                settings._sticky_allow = set()  # type: ignore[attr-defined]
+                            settings._sticky_allow.add(name)  # type: ignore[attr-defined]
+                            if verbose:
+                                sys.stderr.write(
+                                    f"[sticky-session: {name!r} will skip prompts until /clear]\n"
+                                )
+                        elif always_choice:
+                            # Persist tool allow-rule to project-local
+                            # settings.local.json so future invocations
+                            # in this CWD don't re-prompt.
+                            try:
+                                _persist_sticky_rule(CONFIG.cwd, name)
+                                # Also add to in-memory rules for THIS turn.
+                                if name not in settings.permissions.allow:
+                                    settings.permissions.allow.append(name)
+                                if verbose:
+                                    sys.stderr.write(
+                                        f"[always: {name!r} added to "
+                                        ".open-code/settings.local.json]\n"
+                                    )
+                            except Exception as exc:
+                                sys.stderr.write(
+                                    f"[failed to persist always-allow: {exc}; "
+                                    "falling back to sticky-session]\n"
+                                )
+                                if not hasattr(settings, "_sticky_allow"):
+                                    settings._sticky_allow = set()  # type: ignore[attr-defined]
+                                settings._sticky_allow.add(name)  # type: ignore[attr-defined]
+                        if not (ans.startswith("y") or sticky_choice
+                                or always_choice):
                             result = {"ok": False,
                                       "error": f"user declined ({why})"}
                             metrics["tool_errors"] += 1

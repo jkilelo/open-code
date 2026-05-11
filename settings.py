@@ -47,6 +47,12 @@ class PermissionRules:
     allow: list[str] = field(default_factory=list)
     ask: list[str] = field(default_factory=list)
     deny: list[str] = field(default_factory=list)
+    # Tier 2 #17 — sticky session permissions. Written by the REPL's
+    # "always" prompt choice. Wins over ask rules but loses to deny,
+    # so the user can override a project-level ask=tool rule by
+    # adding tool to their .open-code/settings.local.json
+    # `permissions.always_allow` list.
+    always_allow: list[str] = field(default_factory=list)
 
 
 VALID_MODES = ("default", "acceptEdits", "plan", "auto", "bypassPermissions")
@@ -100,7 +106,7 @@ def _merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
                 and isinstance(out.get("permissions"), dict)):
             merged = dict(out["permissions"])
             for pk, pv in v.items():
-                if pk in ("allow", "ask", "deny") and isinstance(pv, list):
+                if pk in ("allow", "ask", "deny", "always_allow") and isinstance(pv, list):
                     existing = merged.get(pk, [])
                     if not isinstance(existing, list):
                         existing = []
@@ -135,6 +141,8 @@ def load_layered_settings(cwd: Path) -> Settings:
         allow=[r for r in (perm_dict.get("allow") or []) if isinstance(r, str)],
         ask=[r for r in (perm_dict.get("ask") or []) if isinstance(r, str)],
         deny=[r for r in (perm_dict.get("deny") or []) if isinstance(r, str)],
+        always_allow=[r for r in (perm_dict.get("always_allow") or [])
+                      if isinstance(r, str)],
     )
     hooks_disabled = bool((merged.get("hooks") or {}).get("disabled", False))
     sl = merged.get("statusLine") or {}
@@ -222,6 +230,11 @@ def evaluate_permission(
     for rule in perm.deny:
         if _match_rule(rule, tool, args):
             return ("deny", f"matched deny rule {rule!r}")
+    # always_allow beats ask (Tier 2 #17). Lets a project-local
+    # "always" decision override a higher-layer ask rule.
+    for rule in perm.always_allow:
+        if _match_rule(rule, tool, args):
+            return ("allow", f"matched always_allow rule {rule!r}")
     for rule in perm.ask:
         if _match_rule(rule, tool, args):
             return ("ask", f"matched ask rule {rule!r}")

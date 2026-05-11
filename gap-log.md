@@ -259,6 +259,16 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.17.0 ships 🟢.** Tier 2: 8 of 15 features done. Next: #17 sticky session permissions.
 
+---
+
+## v0.18.0 — 2026-05-11 (Tier 2 #17)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#17** | **Sticky session permissions** (REPL `ask` prompt now offers y=once / s=session / a=always / n=no; `s` adds to in-memory `settings._sticky_allow`; `a` persists tool name to `.open-code/settings.local.json` `permissions.always_allow`; new precedence tier `deny > always_allow > ask > allow` so the user's "always" decision overrides higher-layer ask rules) | ✅ | `tests/probe_sticky_permissions.py` 4/4: always_allow beats competing ask, idempotent persistence preserves other settings, refuses to overwrite malformed JSON, `_sticky_allow` bypass with stubbed Gemini + monkeypatched `input()` (asserts input is never called) |
+
+**v0.18.0 ships 🟢.** Tier 2: 9 of 15 features done. Next: #20 `--print` JSON stream output (closes Batch B).
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)
