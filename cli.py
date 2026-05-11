@@ -116,6 +116,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Don't spawn MCP servers declared in settings.json.",
     )
     parser.add_argument(
+        "--trust-hooks",
+        action="store_true",
+        help="Allow this project's .open-code/hooks/ to run for this "
+             "invocation without prompting. Does NOT persist trust.",
+    )
+    parser.add_argument(
+        "--no-hooks",
+        action="store_true",
+        help="Disable all hook execution for this invocation.",
+    )
+    parser.add_argument(
         "--root",
         default=os.environ.get("OPEN_CODE_ROOT", str(DEFAULT_OC_ROOT)),
         help=f"Sessions root dir (default: {DEFAULT_OC_ROOT}).",
@@ -195,6 +206,19 @@ def main(argv: list[str] | None = None) -> int:
         mcp_client = MCPClient()
         mcp_client.start_servers(mcp_servers_cfg)
         set_mcp_client(mcp_client)
+
+    # Hook trust gate. If the project ships .open-code/hooks/, prompt
+    # the user for consent (or auto-deny in one-shot mode). This is the
+    # mitigation for the "hostile repo clone -> RCE" class of bug.
+    if args.no_hooks:
+        settings.hooks_disabled = True
+    else:
+        import hooks as _hooks
+        is_interactive = sys.stdin.isatty()
+        _hooks.ensure_hooks_trusted(
+            cwd, interactive=is_interactive,
+            trust_override=args.trust_hooks,
+        )
     if settings.sources and not args.quiet:
         print(
             f"[loaded settings from {', '.join(str(p) for p in settings.sources)}]",

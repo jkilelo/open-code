@@ -199,6 +199,30 @@ real blockers. v0.14.1 closes them.
 
 **v0.14.1 ships 🟢.** Tier 1 honestly complete.
 
+---
+
+## v0.14.2 — 2026-05-11 (second brutal-review blockers closed)
+
+The second brutal review of v0.14.1 returned **FAIL**: the MCP fix
+introduced a new concurrency bug, and hook-RCE was misclassified as
+🟡. v0.14.2 closes both.
+
+| Blocker | Status | Evidence |
+|---------|--------|----------|
+| 🔴 MCP `_call` drops responses under concurrency (same anti-pattern as the bug it replaced: collect-one-then-discard-rest) | ✅ closed | `tests/probe_mcp_concurrency.py`: 8/8 parallel calls now complete; per-msg-id `threading.Event` dispatch; `next_id_lock` prevents id collisions; reader thread exits in <3s on shutdown |
+| 🔴 Hook RCE-by-cd-into-hostile-repo (was misclassified as 🟡) | ✅ closed | `tests/probe_hook_security.py` (rewritten): untrusted hooks DON'T fire; explicit trust via `mark_project_trusted` or `--trust-hooks` is required; non-interactive mode auto-denies; trust persisted to `~/.open-code/trusted-projects.json` for "trust always" choice |
+| Bonus: stderr pipe-buffer deadlock in MCP | ✅ closed | Second daemon thread per server drains stderr into a bounded 1000-line buffer |
+
+**v0.14.2 ships 🟢.** Tier 1 honestly complete (this time honestly honest).
+
+## Remaining 🟡 (carried to v0.15+)
+
+- Skills YAML edges (quoted strings, dash-lists, block scalars)
+- architect/editor flags dead in one-shot mode (only `/plan`+`/act`)
+- bypassPermissions doesn't imply --allow-outside-cwd/--allow-dangerous
+- PageRank personalization concentration (mathematically correct;
+  aggressive ranking shift under task hints)
+
 ## Carried 🟡 gaps (brutal review's "small" tier — deferred to v0.15)
 
 These survived the v0.14.1 cut because they're documented behavior gaps,

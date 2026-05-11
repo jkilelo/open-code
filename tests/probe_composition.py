@@ -78,6 +78,8 @@ assert "run_shell(curl *)" in S.permissions.deny
 assert S.architect_model == "gemini-3.1-pro-preview"
 
 import hooks as _hooks
+# v0.14.2: explicit trust required before any hook will fire.
+_hooks.mark_project_trusted(td, "allow", persist=False)
 r = _hooks.fire("PreToolUse", td, session_id="sess1",
                 payload={"tool": "run_shell", "args": {"command": "rm hello.py"}})
 print(f"[hooks] PreToolUse for rm: blocked={r.block} reason={r.reason!r}")

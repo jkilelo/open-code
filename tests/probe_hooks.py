@@ -23,8 +23,15 @@ def _write_hook(event_dir: Path, name: str, body: str) -> Path:
     return p
 
 
+def _trust(base: Path) -> None:
+    """v0.14.2: hooks now refuse to fire without explicit trust.
+    Mark the test CWD as trusted (in-process only, no persistence)."""
+    hooks.mark_project_trusted(base, "allow", persist=False)
+
+
 # ---- Test 1: no hooks dir -> empty result, no error ----
 with tempfile.TemporaryDirectory() as d:
+    hooks.mark_project_trusted(Path(d).resolve(), "allow", persist=False)
     r = hooks.fire("PreToolUse", Path(d), session_id="x", payload={})
     assert not r.block and r.invoked == [], f"expected empty result, got {r}"
 print("[PASS] no hooks dir -> empty result")
@@ -33,6 +40,7 @@ print("[PASS] no hooks dir -> empty result")
 # ---- Test 2: PreToolUse exit 2 blocks; reason captured ----
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
+    _trust(base)
     pre = base / ".open-code" / "hooks" / "PreToolUse"
     _write_hook(pre, "10-deny.py",
                 "import sys; sys.stderr.write('go away'); sys.exit(2)")
@@ -47,6 +55,7 @@ print("[PASS] PreToolUse exit 2 blocks; stderr captured as reason")
 # ---- Test 3: JSON payload {block, reason} also blocks ----
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
+    _trust(base)
     pre = base / ".open-code" / "hooks" / "PreToolUse"
     _write_hook(pre, "10-jsondeny.py", '''
 import sys, json
@@ -63,6 +72,7 @@ print("[PASS] JSON payload reason captured")
 # ---- Test 4: PostToolUse never blocks; receives result ----
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
+    _trust(base)
     log_file = base / "hook.log"
     post = base / ".open-code" / "hooks" / "PostToolUse"
     _write_hook(post, "10-log.py", f'''
@@ -87,6 +97,7 @@ print("[PASS] PostToolUse fires; receives tool result on stdin")
 # ---- Test 5: SessionStart additionalContext stitched ----
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
+    _trust(base)
     ss = base / ".open-code" / "hooks" / "SessionStart"
     _write_hook(ss, "10-ctx.py", '''
 import json
@@ -108,6 +119,7 @@ print("[PASS] SessionStart additionalContext stitched from multiple hooks")
 # ---- Test 6: UserPromptSubmit transformedPrompt honored ----
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
+    _trust(base)
     ups = base / ".open-code" / "hooks" / "UserPromptSubmit"
     _write_hook(ups, "10-rewrite.py", '''
 import sys, json
@@ -124,6 +136,7 @@ print("[PASS] UserPromptSubmit transformedPrompt applied")
 # ---- Test 7: env vars set when invoking ----
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
+    _trust(base)
     out = base / "envcheck.json"
     pre = base / ".open-code" / "hooks" / "PreToolUse"
     _write_hook(pre, "10-env.py", f'''
@@ -147,6 +160,7 @@ print("[PASS] env vars OPEN_CODE_PROJECT_DIR / _SESSION_ID / _CWD all set")
 # ---- Test 8: misbehaving hook (exit 1) -> errored flag, doesn't crash ----
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
+    _trust(base)
     pre = base / ".open-code" / "hooks" / "PreToolUse"
     _write_hook(pre, "10-broken.py", "import sys; sys.exit(1)")
     _write_hook(pre, "20-ok.py", "")
@@ -161,6 +175,7 @@ print("[PASS] misbehaving hook logs error; other hooks still run")
 # ---- Test 9: walk-up discovery ----
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
+    _trust(base)
     deep = base / "a" / "b" / "c"
     deep.mkdir(parents=True)
     pre = base / ".open-code" / "hooks" / "PreToolUse"

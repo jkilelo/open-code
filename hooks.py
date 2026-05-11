@@ -50,6 +50,15 @@ HOOK_EVENTS = (
 # Per-hook execution timeout (seconds). Anything slower is misbehavior.
 HOOK_TIMEOUT_SECS = 30
 
+# Persisted trust decisions live here. Format:
+#   { "<encoded-cwd>": { "decision": "allow"|"deny", "trusted_at": "...", "cwd": "..." } }
+TRUSTED_PROJECTS_PATH = Path.home() / ".open-code" / "trusted-projects.json"
+
+# In-process trust cache, keyed by encoded CWD. Set by
+# `ensure_hooks_trusted` after consulting the persisted file or
+# prompting the user. `fire()` consults this before invoking any hook.
+_session_trust: dict[str, bool] = {}
+
 
 @dataclass
 class HookResult:
@@ -78,6 +87,155 @@ def find_hooks_dir(cwd: Path) -> Path | None:
         if current.parent == current:
             return None
         current = current.parent
+
+
+# ---------------------------------------------------------------------------
+# Trust / consent gate
+# ---------------------------------------------------------------------------
+
+
+def _encode_cwd_key(cwd: Path) -> str:
+    """Same encoding sessions.py uses for the projects/ dir name."""
+    from sessions import encode_cwd
+    return encode_cwd(str(cwd))
+
+
+def _load_trusted_projects() -> dict[str, dict[str, Any]]:
+    try:
+        text = TRUSTED_PROJECTS_PATH.read_text(encoding="utf-8")
+        data = json.loads(text)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_trusted_projects(data: dict[str, dict[str, Any]]) -> None:
+    try:
+        TRUSTED_PROJECTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        TRUSTED_PROJECTS_PATH.write_text(
+            json.dumps(data, indent=2), encoding="utf-8"
+        )
+    except OSError as exc:
+        sys.stderr.write(
+            f"open-code: failed to persist trusted-projects: {exc}\n"
+        )
+
+
+def is_project_trusted(cwd: Path) -> bool | None:
+    """True = trusted, False = explicitly denied, None = unknown."""
+    key = _encode_cwd_key(cwd)
+    cache = _load_trusted_projects()
+    entry = cache.get(key)
+    if not isinstance(entry, dict):
+        return None
+    decision = entry.get("decision")
+    if decision == "allow":
+        return True
+    if decision == "deny":
+        return False
+    return None
+
+
+def mark_project_trusted(cwd: Path, decision: str = "allow",
+                         persist: bool = True) -> None:
+    """Record a trust decision for `cwd`. `persist=False` is for tests
+    and one-time --trust-hooks invocations: caches in-process only."""
+    from datetime import datetime, timezone
+    key = _encode_cwd_key(cwd)
+    _session_trust[key] = (decision == "allow")
+    if persist:
+        cache = _load_trusted_projects()
+        cache[key] = {
+            "decision": decision,
+            "trusted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "cwd": str(cwd),
+        }
+        _save_trusted_projects(cache)
+
+
+def clear_session_trust() -> None:
+    """Test fixture: reset the in-process cache."""
+    _session_trust.clear()
+
+
+def _list_hook_scripts(hooks_root: Path) -> list[str]:
+    """Inventory of hooks under each event dir; for the trust prompt."""
+    out: list[str] = []
+    for event in HOOK_EVENTS:
+        event_dir = hooks_root / event
+        for script in _executable_scripts(event_dir):
+            try:
+                rel = script.relative_to(hooks_root)
+                out.append(f"  {event}: {rel}")
+            except ValueError:
+                out.append(f"  {event}: {script.name}")
+    return out
+
+
+def ensure_hooks_trusted(cwd: Path, *, interactive: bool = True,
+                        trust_override: bool = False) -> bool:
+    """Resolve the trust question for the project at `cwd`. Side
+    effects: populates the in-process cache so subsequent `fire()`
+    calls don't re-prompt; may also persist a decision.
+
+    Returns True if hooks may fire; False if they're disabled.
+    """
+    hooks_root = find_hooks_dir(cwd)
+    if hooks_root is None:
+        return True  # no hooks to gate
+    project_root = hooks_root.parent.parent
+    key = _encode_cwd_key(project_root)
+    if trust_override:
+        _session_trust[key] = True
+        return True
+    if key in _session_trust:
+        return _session_trust[key]
+    persisted = is_project_trusted(project_root)
+    if persisted is True:
+        _session_trust[key] = True
+        return True
+    if persisted is False:
+        _session_trust[key] = False
+        sys.stderr.write(
+            f"open-code: hooks under {hooks_root} are explicitly denied "
+            f"in {TRUSTED_PROJECTS_PATH}. Skipping.\n"
+        )
+        return False
+    # Unknown — prompt OR auto-deny (non-interactive one-shot).
+    inventory = _list_hook_scripts(hooks_root)
+    if not interactive:
+        sys.stderr.write(
+            f"\nopen-code: project ships hooks under {hooks_root}.\n"
+            + ("\n".join(inventory) + "\n" if inventory else "")
+            + "Hooks run with your full user privileges. Refusing to run "
+            "them in non-interactive mode without explicit consent.\n"
+            "Re-run with --trust-hooks to allow once, or interactively to "
+            "persist a trust decision.\n"
+        )
+        _session_trust[key] = False
+        return False
+    sys.stderr.write(
+        f"\nopen-code: project at {cwd} ships hooks under "
+        f"{hooks_root.relative_to(cwd) if cwd in hooks_root.parents or hooks_root == cwd else hooks_root}.\n"
+        + ("\n".join(inventory) + "\n" if inventory else "")
+        + "Hooks run with your full user privileges.\n"
+        "Trust this project's hooks? [a]llow once / [t]rust always / "
+        "[D]eny [D]: "
+    )
+    try:
+        ans = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        ans = "d"
+    if ans.startswith("t"):
+        mark_project_trusted(cwd, "allow", persist=True)
+        sys.stderr.write(f"open-code: persisted trust for {cwd}\n")
+        return True
+    if ans.startswith("a"):
+        _session_trust[key] = True
+        return True
+    _session_trust[key] = False
+    sys.stderr.write("open-code: hooks denied for this session.\n")
+    return False
 
 
 def _executable_scripts(d: Path) -> list[Path]:
@@ -169,6 +327,18 @@ def fire(event: str, cwd: Path, *, session_id: str,
     hooks_root = find_hooks_dir(cwd)
     if hooks_root is None:
         return result
+    # Trust gate — refuse hooks unless THIS project has been trusted
+    # in this session. Trust is keyed by the project root (the parent
+    # of `.open-code/`), not the user's working dir, so running open-
+    # code from a subdir of a trusted repo still gets hooks.
+    project_root = hooks_root.parent.parent
+    key = _encode_cwd_key(project_root)
+    if not _session_trust.get(key, False):
+        # Also check user's CWD-keyed entry, for test fixtures that
+        # explicitly mark the working dir trusted.
+        cwd_key = _encode_cwd_key(cwd)
+        if not _session_trust.get(cwd_key, False):
+            return result
     event_dir = hooks_root / event
     scripts = _executable_scripts(event_dir)
     if not scripts:

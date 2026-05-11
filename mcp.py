@@ -52,7 +52,21 @@ _EOF_SENTINEL = object()
 
 @dataclass
 class MCPServer:
-    """In-memory state for one connected MCP server."""
+    """In-memory state for one connected MCP server.
+
+    Concurrency model (post-v0.14.2):
+      - One reader thread per server drains stdout, parses each JSON
+        line, and routes the message to the waiter that registered for
+        that id (via response_events + response_slots, both guarded by
+        response_lock).
+      - One stderr-drain thread per server prevents the subprocess from
+        blocking on a full stderr pipe buffer.
+      - `next_id` allocation is guarded by next_id_lock so two threads
+        can't claim the same id.
+      - `_call` uses a per-request `threading.Event` so two callers can
+        wait for their OWN response without dropping each other's
+        messages on the floor (this was the v0.14.1 concurrency bug).
+    """
     name: str
     command: list[str]
     env: dict[str, str] = field(default_factory=dict)
@@ -60,12 +74,16 @@ class MCPServer:
     next_id: int = 1
     tools: list[dict[str, Any]] = field(default_factory=list)
     last_error: str | None = None
-    # The reader thread pushes parsed JSON messages here so `_call`
-    # can do a Queue.get with a real timeout. Without this, `readline`
-    # would block forever on a server that ACKs but never replies.
-    out_queue: "queue.Queue[Any]" = field(default_factory=queue.Queue)
     reader_thread: threading.Thread | None = None
+    stderr_thread: threading.Thread | None = None
     reader_stop: threading.Event = field(default_factory=threading.Event)
+    eof_seen: bool = False
+    next_id_lock: threading.Lock = field(default_factory=threading.Lock)
+    response_lock: threading.Lock = field(default_factory=threading.Lock)
+    response_events: dict[int, threading.Event] = field(default_factory=dict)
+    response_slots: dict[int, dict[str, Any]] = field(default_factory=dict)
+    # Bounded stderr buffer (last N lines) for diagnostics.
+    stderr_buf: list[str] = field(default_factory=list)
 
 
 class MCPClient:
@@ -127,20 +145,32 @@ class MCPClient:
             env=merged_env,
             bufsize=1,
         )
-        # Start a daemon reader thread that drains stdout into the queue.
-        # This lets `_call` wait with a real timeout instead of blocking
-        # forever on a hung server.
+        # Start daemon threads: one drains stdout (dispatches responses
+        # by id), one drains stderr (prevents pipe-buffer deadlock).
         srv.reader_thread = threading.Thread(
             target=self._reader_loop, args=(srv,), daemon=True,
             name=f"mcp-reader-{srv.name}",
         )
         srv.reader_thread.start()
+        srv.stderr_thread = threading.Thread(
+            target=self._stderr_loop, args=(srv,), daemon=True,
+            name=f"mcp-stderr-{srv.name}",
+        )
+        srv.stderr_thread.start()
 
     def _reader_loop(self, srv: MCPServer) -> None:
-        """Drain server stdout into srv.out_queue. Runs in a daemon thread."""
+        """Drain stdout and dispatch each response to the right waiter.
+
+        v0.14.1 used a single Queue and dropped messages with the wrong
+        id — that was a concurrency bug. Now we look up the response
+        event by id and set it directly. Messages without a registered
+        waiter (notifications, late replies) are dropped on the floor;
+        that's deliberate.
+        """
         proc = srv.proc
         if proc is None or proc.stdout is None:
-            srv.out_queue.put(_EOF_SENTINEL)
+            srv.eof_seen = True
+            self._wake_all_waiters(srv)
             return
         try:
             for line in proc.stdout:
@@ -153,10 +183,45 @@ class MCPClient:
                     msg = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                srv.out_queue.put(msg)
+                if not isinstance(msg, dict):
+                    continue
+                msg_id = msg.get("id")
+                if msg_id is None:
+                    continue  # notification — ignore for now
+                with srv.response_lock:
+                    if msg_id in srv.response_events:
+                        srv.response_slots[msg_id] = msg
+                        srv.response_events[msg_id].set()
+                    # else: late reply to a call that already timed out;
+                    # we have no waiter to deliver it to. Drop silently.
         except (ValueError, OSError):
             pass
-        srv.out_queue.put(_EOF_SENTINEL)
+        srv.eof_seen = True
+        self._wake_all_waiters(srv)
+
+    def _stderr_loop(self, srv: MCPServer) -> None:
+        """Drain stderr to a bounded buffer so a chatty server can't
+        block its own stderr write and starve the stdout reader."""
+        proc = srv.proc
+        if proc is None or proc.stderr is None:
+            return
+        try:
+            for line in proc.stderr:
+                if srv.reader_stop.is_set():
+                    break
+                srv.stderr_buf.append(line)
+                if len(srv.stderr_buf) > 1000:
+                    # Cap at ~1000 lines of stderr to prevent unbounded growth
+                    del srv.stderr_buf[0]
+        except (ValueError, OSError):
+            pass
+
+    def _wake_all_waiters(self, srv: MCPServer) -> None:
+        """On EOF / shutdown, signal every pending waiter so they don't
+        block on a dead server until their individual timeouts."""
+        with srv.response_lock:
+            for ev in srv.response_events.values():
+                ev.set()
 
     def _initialize(self, srv: MCPServer) -> None:
         resp = self._call(srv, "initialize", {
@@ -182,47 +247,69 @@ class MCPClient:
     def _call(self, srv: MCPServer, method: str,
               params: dict[str, Any],
               timeout: float | None = None) -> dict[str, Any]:
-        """Send a JSON-RPC request; wait for the matching response with a
-        real wall-clock deadline. Reader thread drains stdout into the
-        queue so a hung server can't block this call indefinitely.
+        """Send a JSON-RPC request; wait for THIS request's response.
 
-        `timeout=None` (default) reads CALL_TIMEOUT_SECS at call time so
-        tests / users that mutate the module global between definition
-        and call get the updated value.
+        Thread-safe (v0.14.2):
+          - next_id allocation guarded by next_id_lock
+          - Each call registers its own threading.Event in
+            srv.response_events before sending. The reader thread
+            dispatches each parsed message to the matching event's
+            slot.
+          - Two concurrent callers don't race on a single Queue; each
+            blocks on its OWN Event.
+
+        `timeout=None` reads CALL_TIMEOUT_SECS at call time so tests
+        that mutate the module global between def and call get the
+        updated value.
         """
         if srv.proc is None or srv.proc.stdin is None:
             raise RuntimeError("server process not initialized")
         eff_timeout = CALL_TIMEOUT_SECS if timeout is None else timeout
-        msg_id = srv.next_id
-        srv.next_id += 1
-        req = {"jsonrpc": "2.0", "method": method,
-               "params": params, "id": msg_id}
-        srv.proc.stdin.write(json.dumps(req) + "\n")
-        srv.proc.stdin.flush()
-        deadline = time.monotonic() + eff_timeout
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
+
+        # Allocate a unique id and register a waiter slot BEFORE writing
+        # the request — otherwise a very fast reply could arrive before
+        # we've registered.
+        with srv.next_id_lock:
+            msg_id = srv.next_id
+            srv.next_id += 1
+        ev = threading.Event()
+        with srv.response_lock:
+            srv.response_events[msg_id] = ev
+            if srv.eof_seen:
+                # Server already gone; signal immediately and bail.
+                ev.set()
+
+        try:
+            req = {"jsonrpc": "2.0", "method": method,
+                   "params": params, "id": msg_id}
+            try:
+                srv.proc.stdin.write(json.dumps(req) + "\n")
+                srv.proc.stdin.flush()
+            except (BrokenPipeError, OSError) as exc:
+                raise RuntimeError(
+                    f"server {srv.name!r} stdin closed: {exc}"
+                ) from exc
+
+            if not ev.wait(timeout=eff_timeout):
                 raise TimeoutError(
                     f"MCP call {method!r} on server {srv.name!r} "
                     f"timed out after {eff_timeout}s"
                 )
-            try:
-                msg = srv.out_queue.get(timeout=min(remaining, 1.0))
-            except queue.Empty:
-                continue  # loop, check deadline
-            if msg is _EOF_SENTINEL:
-                stderr = ""
-                try:
-                    stderr = srv.proc.stderr.read() if srv.proc.stderr else ""
-                except Exception:
-                    pass
-                raise RuntimeError(
-                    f"server {srv.name!r} closed stdout; stderr: {stderr[:300]!r}"
-                )
-            if isinstance(msg, dict) and msg.get("id") == msg_id:
+
+            with srv.response_lock:
+                msg = srv.response_slots.pop(msg_id, None)
+            if msg is not None:
                 return msg
-            # else: notification or out-of-order — drop for now
+            # Event was set but no slot — server hit EOF.
+            stderr_tail = "".join(srv.stderr_buf[-20:])[:500]
+            raise RuntimeError(
+                f"server {srv.name!r} closed stdout before reply; "
+                f"stderr tail: {stderr_tail!r}"
+            )
+        finally:
+            with srv.response_lock:
+                srv.response_events.pop(msg_id, None)
+                srv.response_slots.pop(msg_id, None)
 
     def _send_notification(self, srv: MCPServer, method: str,
                            params: dict[str, Any]) -> None:
@@ -301,6 +388,8 @@ class MCPClient:
 
     def _terminate(self, srv: MCPServer) -> None:
         srv.reader_stop.set()
+        srv.eof_seen = True
+        self._wake_all_waiters(srv)
         if srv.proc is None:
             return
         try:
