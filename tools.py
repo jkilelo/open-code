@@ -336,9 +336,53 @@ TOOL_DECLARATIONS = [
 ]
 
 
+def tool_apply_patch(patch: str) -> dict[str, Any]:
+    """Apply a V4A patch envelope. Body lives in patches.py to keep
+    this module's surface small.
+
+    Late import: tools.py is imported by patches.py for CONFIG / _is_under,
+    so we can't import patches at module load.
+    """
+    from patches import apply_patch as _apply_patch
+    return _apply_patch(patch)
+
+
+# Static V4A apply_patch tool declaration — kept here to avoid a load-time
+# cycle with patches.py. The runtime body lives in patches.py.
+APPLY_PATCH_TOOL_DECLARATION = {
+    "name": "apply_patch",
+    "description": (
+        "Apply a V4A patch envelope to the working directory in one shot. "
+        "Use for multi-file edits, anchored hunks, and renames. The "
+        "envelope must begin with `*** Begin Patch` and end with "
+        "`*** End Patch`. Inside, use `*** Add File: <path>`, "
+        "`*** Update File: <path>` (with `@@ anchor` lines and `+`/`-` "
+        "diff lines), `*** Delete File: <path>`, or `*** Move to: <new>` "
+        "(after an Update block). Hunks are anchored by surrounding "
+        "code, NOT line numbers — if the anchor is ambiguous the patch "
+        "fails clean. Honors --allow-outside-cwd."
+    ),
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "patch": {
+                "type": "STRING",
+                "description": "The full V4A envelope, beginning with "
+                               "'*** Begin Patch' and ending with "
+                               "'*** End Patch'.",
+            },
+        },
+        "required": ["patch"],
+    },
+}
+
+TOOL_DECLARATIONS.append(APPLY_PATCH_TOOL_DECLARATION)
+
+
 TOOL_FUNCTIONS = {
     "read_file": tool_read_file,
     "write_file": tool_write_file,
     "list_dir": tool_list_dir,
     "run_shell": tool_run_shell,
+    "apply_patch": tool_apply_patch,
 }

@@ -154,6 +154,16 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 **v0.11.0 ships 🟢.** 7 of 10 Tier 1 features done. **Batch A complete.**
 
+---
+
+## v0.12.0 — 2026-05-11 (#8 V4A apply_patch)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#8** | **V4A apply_patch tool** (Add/Update/Delete/Move; anchored hunks; path sandbox) | ✅ | `tests/probe_apply_patch.py` 10/10; live: model called `apply_patch` once with envelope covering Update utils.py (greet "Hello"→"Hi") + Add CHANGES.md; both files correct on disk |
+
+**v0.12.0 ships 🟢.** 8 of 10 Tier 1 features done.
+
 ## Tier 1 status
 
 | # | Feature | Status |
