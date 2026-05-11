@@ -23,6 +23,7 @@ handler is then a thin wrapper.
 """
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -134,6 +135,11 @@ def parse_duration(value: str) -> float:
         n = float(v)
     except ValueError:
         raise ValueError(f"can't parse duration {value!r}")
+    # Block inf / nan explicitly. NaN comparisons always return False,
+    # so the `< 0` check below silently lets `nan` through. `inf` would
+    # pass the `< 0` check and then `time.sleep(inf)` would hang the REPL.
+    if not math.isfinite(n):
+        raise ValueError(f"duration must be finite; got {value!r}")
     if n < 0:
         raise ValueError(f"duration must be >= 0; got {value!r}")
     return n * mult

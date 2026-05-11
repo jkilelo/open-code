@@ -18,14 +18,14 @@ assert SC.parse_duration("5m") == 300.0
 assert SC.parse_duration("1h") == 3600.0
 assert SC.parse_duration("2.5m") == 150.0
 assert SC.parse_duration("0") == 0.0
-for bad in ("", "abc", "-5", "5x", "h"):
+for bad in ("", "abc", "-5", "5x", "h", "inf", "infinity", "nan", "-inf"):
     raised = False
     try:
         SC.parse_duration(bad)
     except ValueError:
         raised = True
     assert raised, f"parse_duration({bad!r}) should have raised"
-print("[PASS] parse_duration handles s/m/h suffixes and rejects junk")
+print("[PASS] parse_duration handles s/m/h suffixes and rejects junk (incl. inf/nan)")
 
 
 # ===========================================================================

@@ -357,6 +357,26 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 - Tier 2 commits: 11 (one per feature batch; no rebases)
 - Every release: spec + probe + gap-log + runs doc
 
+---
+
+## v0.24.1 — 2026-05-11 (brutal-review blockers closed)
+
+The brutal review of v0.14.2→v0.24.0 returned **FAIL** with 3 claimed blockers + 1 footgun.
+
+| # | Claim | Status | Evidence |
+|---|-------|--------|----------|
+| **B2** | `always_allow` persists tool name only; "always" on one `npm install` permanently grants ALL `run_shell` | ✅ confirmed + fixed | `_persist_sticky_rule(cwd, tool, specifier)` now writes rule `tool(specifier)`; `_sticky_spec_from_args` picks the discriminating key per tool. `tests/probe_sticky_permissions.py` test 2b is the regression guard: "always" on `npm install` does NOT auto-allow `curl ... | sh`. |
+| B1 | `git clean -fd` doesn't honor shadow `info/exclude`; deletes user-gitignored files | ✅ refuted + guard added | `tests/probe_restore_safety.py` (NEW) 4 scenarios all pass: shadow info/exclude honored, user .gitignore honored, ordinary untracked correctly removed, `.open-code/` survives. Reviewer's mental model of `git clean` (without `-x`) was wrong; probe now guards against regression. |
+| **H1** | `parse_duration("inf")` → `time.sleep(inf)` hangs REPL permanently | ✅ confirmed + fixed | `math.isfinite` check in `schedule.parse_duration`. Probe extended to reject "inf"/"infinity"/"nan"/"-inf". |
+
+**v0.24.1 ships 🟢.** 41/41 probes green (40 prior + new probe_restore_safety).
+
+## Carried 🟡 (not fixed this cycle)
+
+- H2 (broad `except Exception` in output_styles plugin import)
+- H4 (O(N²) message-count scan in sessions.py — pre-Tier-2)
+- H5 (`OPEN_CODE_MANAGED_SETTINGS` env override as priv-esc surface)
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

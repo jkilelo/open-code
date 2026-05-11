@@ -517,13 +517,42 @@ def _emit_json(event_type: str, **fields: Any) -> None:
         pass  # broken pipe; we still want the agent loop to terminate cleanly
 
 
-def _persist_sticky_rule(cwd: Path, tool: str) -> None:
+def _sticky_spec_from_args(args: dict[str, Any]) -> str | None:
+    """Pick the most-discriminating string arg as a sticky-rule specifier.
+
+    The specifier becomes the `(...)` form of the persisted rule. E.g.
+    `run_shell(npm install)` matches via fnmatch against the command arg.
+    Returns None when no string-valued arg is available — caller should
+    fall back to a "no specifier" persisted rule (broad allow) and
+    say so plainly in the prompt UX.
+    """
+    # Prefer the conventional discriminator key per tool.
+    for k in ("command", "path", "file_path", "url", "query", "patch"):
+        v = args.get(k)
+        if isinstance(v, str) and v:
+            return v
+    for v in args.values():
+        if isinstance(v, str) and v:
+            return v
+    return None
+
+
+def _persist_sticky_rule(cwd: Path, tool: str,
+                         specifier: str | None = None) -> str:
     """Persist a sticky `always` permission grant.
 
-    Writes a tool-name allow rule to `<cwd>/.open-code/settings.local.json`
-    (the gitignored per-machine layer). Caller is responsible for handling
-    OSError / JSONDecodeError that bubble up — this helper raises rather
-    than silently failing so the user sees the problem.
+    Closes brutal-review B2: previously this persisted just the tool
+    name, which made "always allow this npm install" silently grant
+    every future `run_shell` invocation. Now the caller passes a
+    specifier (the discriminating arg, e.g. the shell command) so
+    the rule is scoped — e.g. `run_shell(npm install)`.
+
+    Specifier=None still works (back-compat for tests + intentional
+    broad grants) but the caller is responsible for surfacing that
+    choice to the user in the UX.
+
+    Returns the rule string that was persisted, so the caller can
+    show "[always: rule X added to settings.local.json]".
     """
     settings_dir = cwd / ".open-code"
     settings_dir.mkdir(parents=True, exist_ok=True)
@@ -549,11 +578,13 @@ def _persist_sticky_rule(cwd: Path, tool: str) -> None:
     if not isinstance(always_list, list):
         always_list = []
         perms["always_allow"] = always_list
-    if tool not in always_list:
-        always_list.append(tool)
+    rule = f"{tool}({specifier})" if specifier else tool
+    if rule not in always_list:
+        always_list.append(rule)
     settings_file.write_text(
         json.dumps(data, indent=2) + "\n", encoding="utf-8",
     )
+    return rule
 
 
 def _new_user_content(text: str) -> types.Content:
@@ -1049,18 +1080,26 @@ def run_loop(
                                     f"[sticky-session: {name!r} will skip prompts until /clear]\n"
                                 )
                         elif always_choice:
-                            # Persist tool allow-rule to project-local
-                            # settings.local.json so future invocations
-                            # in this CWD don't re-prompt.
+                            # Persist a SCOPED allow-rule to project-local
+                            # settings.local.json. Closes brutal-review B2:
+                            # the rule includes a specifier derived from
+                            # the current args, so future calls with
+                            # different args still prompt.
                             try:
-                                _persist_sticky_rule(CONFIG.cwd, name)
-                                # Also add to in-memory rules for THIS turn.
-                                if name not in settings.permissions.allow:
-                                    settings.permissions.allow.append(name)
+                                spec = _sticky_spec_from_args(args)
+                                rule = _persist_sticky_rule(
+                                    CONFIG.cwd, name, specifier=spec,
+                                )
+                                # Mirror in-memory for THIS turn so a
+                                # later identical call in the same loop
+                                # also short-circuits without a re-read.
+                                if rule not in settings.permissions.always_allow:
+                                    settings.permissions.always_allow.append(rule)
                                 if verbose:
+                                    scope = f" (scope: {spec!r})" if spec else " (BROAD: no arg specifier)"
                                     sys.stderr.write(
-                                        f"[always: {name!r} added to "
-                                        ".open-code/settings.local.json]\n"
+                                        f"[always: rule {rule!r} added to "
+                                        f".open-code/settings.local.json{scope}]\n"
                                     )
                             except Exception as exc:
                                 sys.stderr.write(
