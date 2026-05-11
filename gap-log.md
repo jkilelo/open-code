@@ -457,6 +457,28 @@ User asked for a modern UI/UX with optional text-only mode. After researching th
 
 **v0.25.1 ships [OK].** 45/45 probes green. Aider-style stack (rich + prompt_toolkit) complete.
 
+---
+
+## v0.25.2 -- 2026-05-11 (listings refactor through ui.table)
+
+Closes the deferred polish item from v0.25.0. 7 listing call sites now route through `ui.table`:
+
+| Caller | Refactor |
+|--------|----------|
+| `repl /sessions` | `_print_session_list` -> `ui.table` with `["ID","STARTED","MODEL","TASK"]` |
+| `repl /skills` | `render_skill_listing` -> `ui.table` |
+| `repl /agents` | `render_agent_listing` -> `ui.table` |
+| `repl /checkpoints` | manual print loop -> `ui.table` |
+| `cli --list-sessions[-all]` | `_print_session_list` -> `ui.table` with scope in title |
+| `cli --list-styles` | `for name,src: print(...)` -> `ui.table` |
+| `cli --list-plugins` | `render_plugin_listing` -> `ui.table` |
+
+On a TTY: tables render as Rich tables with bold-cyan headers + auto column sizing. Piped / `--plain` / `NO_COLOR`: pure-ASCII aligned columns. `--print`: no-op (JSON consumers don't see listings).
+
+Back-compat: original render functions kept exported (`skills.render_skill_listing`, `subagents.render_agent_listing`, `plugins.render_plugin_listing`, `cli._print_session_list`) in case external tooling imports them.
+
+**v0.25.2 ships [OK].** 45/45 probes green. Aider-style stack complete end-to-end.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

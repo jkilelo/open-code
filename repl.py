@@ -169,7 +169,21 @@ def run_repl(
                 print(f"[new session {session.id}]")
                 continue
             if cmd == "sessions":
-                _print_session_list(store.list_for_cwd(str(cwd)))
+                sess = store.list_for_cwd(str(cwd))
+                if not sess:
+                    ui.line("(no sessions yet)")
+                else:
+                    rows: list[list[str]] = []
+                    for s in sess:
+                        task = s.task or ""
+                        if len(task) > 40:
+                            task = task[:37] + "..."
+                        rows.append([s.id, s.started_at, s.model, task])
+                    ui.table(
+                        title=f"Sessions in {cwd}",
+                        columns=["ID", "STARTED", "MODEL", "TASK"],
+                        rows=rows,
+                    )
                 continue
             if cmd == "switch":
                 if not rest:
@@ -206,11 +220,41 @@ def run_repl(
                 continue
             if cmd == "skills":
                 import skills as _skills
-                print(_skills.render_skill_listing(_skills.discover_skills(cwd)))
+                skill_items = _skills.discover_skills(cwd)
+                if not skill_items:
+                    ui.line(
+                        "(no skills defined; create "
+                        ".open-code/skills/<name>/SKILL.md)"
+                    )
+                else:
+                    rows = []
+                    for sk in skill_items:
+                        desc = sk.description or ""
+                        if len(desc) > 55:
+                            desc = desc[:52] + "..."
+                        rows.append([sk.name, desc])
+                    ui.table(title="Skills",
+                             columns=["NAME", "DESCRIPTION"], rows=rows)
                 continue
             if cmd == "agents":
                 import subagents as _subagents
-                print(_subagents.render_agent_listing(_subagents.discover_agents(cwd)))
+                agents_items = _subagents.discover_agents(cwd)
+                if not agents_items:
+                    ui.line(
+                        "(no agents defined; create "
+                        ".open-code/agents/<name>.md)"
+                    )
+                else:
+                    rows = []
+                    for ag in agents_items:
+                        desc = ag.description or ""
+                        if len(desc) > 40:
+                            desc = desc[:37] + "..."
+                        m = ag.model or "(default)"
+                        rows.append([ag.name, m, desc])
+                    ui.table(title="Agents",
+                             columns=["NAME", "MODEL", "DESCRIPTION"],
+                             rows=rows)
                 continue
             if cmd == "plan":
                 if not rest:
@@ -403,13 +447,19 @@ def run_repl(
                         "first /checkpoint or auto-checkpoint]"
                     )
                     continue
-                rows = _ckpt.list_checkpoints(cwd, limit=20)
-                if not rows:
-                    print("[no checkpoints yet]")
+                ckpt_rows = _ckpt.list_checkpoints(cwd, limit=20)
+                if not ckpt_rows:
+                    ui.line("[no checkpoints yet]")
                     continue
-                print("Recent shadow-git checkpoints (newest first):")
-                for r in rows:
-                    print(f"  {r['short_sha']}  {r['ts']}  {r['label']}")
+                table_rows = [
+                    [r["short_sha"], r["ts"], r["label"]]
+                    for r in ckpt_rows
+                ]
+                ui.table(
+                    title="Recent shadow-git checkpoints (newest first)",
+                    columns=["SHA", "TIMESTAMP", "LABEL"],
+                    rows=table_rows,
+                )
                 continue
             if cmd == "checkpoint":
                 import checkpoints as _ckpt

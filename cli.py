@@ -275,13 +275,45 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list_styles:
         from output_styles import list_available
-        for name, source in list_available(cwd):
-            print(f"  {name:<20}  ({source})")
+        styles_rows = list_available(cwd)
+        if not styles_rows:
+            ui.line("(no output styles available)")
+        else:
+            ui.table(
+                title="Output styles",
+                columns=["NAME", "SOURCE"],
+                rows=[[n, s] for n, s in styles_rows],
+            )
         return 0
 
     if args.list_plugins:
         import plugins as _plugins
-        print(_plugins.render_plugin_listing(_plugins.discover_plugins(cwd)))
+        ps = _plugins.discover_plugins(cwd)
+        if not ps:
+            ui.line("(no plugins installed)")
+        else:
+            rows = []
+            for p in ps:
+                exposed_bits: list[str] = []
+                if p.exposes_skills:
+                    exposed_bits.append(f"skills={len(p.exposes_skills)}")
+                if p.exposes_agents:
+                    exposed_bits.append(f"agents={len(p.exposes_agents)}")
+                if p.exposes_output_styles:
+                    exposed_bits.append(
+                        f"styles={len(p.exposes_output_styles)}"
+                    )
+                exposed = ", ".join(exposed_bits) or "(nothing)"
+                desc = p.description or ""
+                if len(desc) > 40:
+                    desc = desc[:37] + "..."
+                rows.append([p.name, p.version, p.source, exposed, desc])
+            ui.table(
+                title="Installed plugins",
+                columns=["NAME", "VERSION", "SOURCE", "EXPOSES",
+                         "DESCRIPTION"],
+                rows=rows,
+            )
         return 0
     if args.print_json:
         # Implies --quiet and disables streaming so we emit one
@@ -350,8 +382,20 @@ def main(argv: list[str] | None = None) -> int:
             else store.list_for_cwd(str(cwd))
         )
         scope = "all directories" if args.list_sessions_all else str(cwd)
-        print(f"Recent sessions in {scope}:")
-        _print_session_list(sessions)
+        if not sessions:
+            ui.line(f"(no sessions in {scope})")
+        else:
+            rows: list[list[str]] = []
+            for s in sessions:
+                task = s.task or ""
+                if len(task) > 40:
+                    task = task[:37] + "..."
+                rows.append([s.id, s.started_at, s.model, task])
+            ui.table(
+                title=f"Recent sessions in {scope}",
+                columns=["ID", "STARTED", "MODEL", "TASK"],
+                rows=rows,
+            )
         return 0
 
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
