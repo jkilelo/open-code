@@ -299,6 +299,16 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.21.0 ships 🟢.** Tier 2: 12 of 15 features done. Three left: #21 (skill cache), #22 (plugin system), #24 (/loop+/schedule).
 
+---
+
+## v0.22.0 — 2026-05-11 (Tier 2 #21)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#21** | **Skill prompt caching** (per-skill opt-in via frontmatter `cache: true`; cache key `(skill_path, mtime, args)`; TTL 300s default override via `OPEN_CODE_SKILL_CACHE_TTL`; `use_cache=False` programmatic bypass; REPL `/skill <name> --refresh` token bypasses; `clear_skill_cache()` resets) | ✅ | `tests/probe_skill_cache.py` 5/5: uncached skill re-expands each call (volatile ns timestamp differs), `cache: true` skill returns identical body on second call (volatile cmd ran once), `use_cache=False` re-expands, different args bypass cache, mtime bump invalidates |
+
+**v0.22.0 ships 🟢.** Tier 2: 13 of 15 features done. Two left: #22 plugins, #24 /loop+/schedule.
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

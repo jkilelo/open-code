@@ -32,10 +32,12 @@ sees only the resolved text.
 """
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -47,6 +49,18 @@ MAX_SKILL_BODY_BYTES = 50_000
 SKILLS_REL = ".open-code/skills"
 COMMAND_TIMEOUT_SECS = 20
 
+# Tier 2 #21 — skill prompt caching. Skills with frontmatter
+# `cache: true` get their expanded body memoized by
+# (skill_path_mtime, args_string) for `_CACHE_TTL_SECS`. Default off
+# at the per-skill level so prior behavior is preserved.
+_CACHE_TTL_SECS = int(os.environ.get("OPEN_CODE_SKILL_CACHE_TTL", "300"))
+_EXPANSION_CACHE: dict[tuple[str, float, str], tuple[float, str]] = {}
+
+
+def clear_skill_cache() -> None:
+    """Force-evict every cached expansion. For tests + REPL `/skill --refresh`."""
+    _EXPANSION_CACHE.clear()
+
 
 @dataclass
 class Skill:
@@ -56,6 +70,9 @@ class Skill:
     body: str
     allowed_tools: list[str] = field(default_factory=list)
     disable_model_invocation: bool = False
+    # Tier 2 #21 — when True (frontmatter `cache: true`), expanded
+    # body is memoized for OPEN_CODE_SKILL_CACHE_TTL seconds (default 300).
+    cache: bool = False
     path: Path | None = None
 
 
@@ -122,6 +139,7 @@ def load_skill_file(path: Path) -> Skill | None:
         body=body,
         allowed_tools=_parse_list(fm.get("allowed-tools", "")),
         disable_model_invocation=_parse_bool(fm.get("disable-model-invocation", "")),
+        cache=_parse_bool(fm.get("cache", "")),
         path=path,
     )
 
@@ -196,14 +214,36 @@ def _expand_arguments(text: str, raw_args: str) -> str:
     return expanded
 
 
-def expand_skill_body(skill: Skill, args: str, cwd: Path) -> str:
+def expand_skill_body(skill: Skill, args: str, cwd: Path,
+                      *, use_cache: bool = True) -> str:
     """Resolve $ARGUMENTS / $1..$9 / `` !`cmd` `` in the skill's body.
 
     Returns the final prompt text that should be sent to the model.
+
+    Tier 2 #21: when `skill.cache` is True AND `use_cache` is True,
+    the expansion is memoized by (skill_path, mtime, args) for
+    `_CACHE_TTL_SECS`. Bypass with `use_cache=False` (REPL
+    `/skill --refresh` or programmatic forced refresh).
     """
+    key: tuple[str, float, str] | None = None
+    if use_cache and skill.cache and skill.path is not None:
+        try:
+            mtime = skill.path.stat().st_mtime
+        except OSError:
+            mtime = -1.0
+        key = (str(skill.path), mtime, args)
+        cached = _EXPANSION_CACHE.get(key)
+        if cached is not None:
+            ts, body = cached
+            if time.time() - ts < _CACHE_TTL_SECS:
+                return body
+            # expired -- fall through to re-expand
     expanded = _expand_arguments(skill.body, args)
     expanded = _expand_command_blocks(expanded, cwd)
-    return expanded.strip()
+    result = expanded.strip()
+    if key is not None:
+        _EXPANSION_CACHE[key] = (time.time(), result)
+    return result
 
 
 def render_skill_listing(skills: Iterable[Skill]) -> str:

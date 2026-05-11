@@ -558,17 +558,25 @@ def run_repl(
                 continue
             if cmd == "skill":
                 if not rest:
-                    print("usage: /skill <name> [args...]")
+                    print("usage: /skill <name> [--refresh] [args...]")
                     continue
                 import skills as _skills
-                parts = rest.split(maxsplit=1)
+                parts = rest.split()
+                # --refresh anywhere in the args bypasses cache for this call
+                use_cache = "--refresh" not in parts
+                parts = [p for p in parts if p != "--refresh"]
+                if not parts:
+                    print("usage: /skill <name> [--refresh] [args...]")
+                    continue
                 skill_name = parts[0]
-                skill_args = parts[1] if len(parts) > 1 else ""
+                skill_args = " ".join(parts[1:]) if len(parts) > 1 else ""
                 sk = _skills.find_skill_by_name(cwd, skill_name)
                 if sk is None:
                     print(f"no skill named {skill_name!r}; try /skills")
                     continue
-                expanded = _skills.expand_skill_body(sk, skill_args, cwd)
+                expanded = _skills.expand_skill_body(
+                    sk, skill_args, cwd, use_cache=use_cache,
+                )
                 if not quiet:
                     print(
                         f"[invoking skill {skill_name!r} "
