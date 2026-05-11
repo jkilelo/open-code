@@ -264,6 +264,27 @@ class SessionStore:
             },
         )
 
+    def append_compact(self, session: Session, *, summary: str,
+                       kept_recent: int, dropped: int, model: str) -> None:
+        """Record a `/compact` event: summary of older history.
+
+        `kept_recent` = number of recent messages preserved verbatim;
+        `dropped` = number of old messages condensed into `summary`.
+        Subsequent --resume sees this event and replaces the dropped
+        history with the summary as a single synthetic user message.
+        """
+        self._append(
+            session,
+            {
+                "kind": "compact",
+                "summary": summary,
+                "kept_recent": kept_recent,
+                "dropped": dropped,
+                "model": model,
+                "ts": _now(),
+            },
+        )
+
     def append_plan(self, session: Session, *, plan_id: str,
                     content: str, model: str) -> None:
         """Record a Plan/Act 'plan' artifact in the session JSONL.
@@ -392,8 +413,15 @@ class SessionStore:
 
         max_messages <= 0 means uncapped. The returned history is
         trimmed to start on a user-role turn (Gemini API requirement).
+
+        If the JSONL contains a `compact` event, the most recent one
+        replaces all msg events before it with a single synthetic
+        user-role summary message. Subsequent `msg` events (those
+        AFTER the compact) load verbatim.
         """
         all_msgs: list[types.Content] = []
+        msg_count_at_compact = 0  # how many msgs preceded the latest compact
+        compact_summary: str | None = None
         try:
             with session.path.open("r", encoding="utf-8") as f:
                 for line in f:
@@ -401,13 +429,26 @@ class SessionStore:
                         ev = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    if ev.get("kind") != "msg":
-                        continue
-                    all_msgs.append(
-                        dict_to_content({"role": ev.get("role", ""), "parts": ev.get("parts", [])})
-                    )
+                    kind = ev.get("kind")
+                    if kind == "msg":
+                        all_msgs.append(
+                            dict_to_content({"role": ev.get("role", ""),
+                                             "parts": ev.get("parts", [])})
+                        )
+                    elif kind == "compact":
+                        compact_summary = ev.get("summary") or ""
+                        msg_count_at_compact = len(all_msgs)
         except OSError:
             return [], 0
+        if compact_summary is not None:
+            # Replace the first `msg_count_at_compact` messages with the
+            # single summary, prepended as a synthetic user message.
+            summary_msg = dict_to_content({
+                "role": "user",
+                "parts": [{"type": "text",
+                           "text": f"[compacted earlier history summary]\n{compact_summary}"}],
+            })
+            all_msgs = [summary_msg] + all_msgs[msg_count_at_compact:]
         if max_messages <= 0 or len(all_msgs) <= max_messages:
             return all_msgs, 0
         trimmed = all_msgs[-max_messages:]

@@ -314,16 +314,100 @@ def build_system_instruction_layered(layers: list[tuple[Path, str]]) -> str:
 _FILE_REF_RE = re.compile(r"@([^\s@]+)")
 
 
+# Tier 2 #19: extended @-providers (Continue.dev pattern). Each token
+# `@<name>` matches a registered provider that produces a context blob.
+# File-path refs (`@README.md`, `@src/main.py`) fall through to the
+# default path-based resolver.
+
+def _provider_diff(cwd: Path, arg: str | None) -> str | None:
+    """`@diff` or `@diff:staged`."""
+    cmd = ["git", "-C", str(cwd), "diff"]
+    if arg == "staged":
+        cmd.append("--staged")
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=8,
+                              encoding="utf-8", errors="replace")
+        out = proc.stdout or ""
+        return out[:30_000] if out.strip() else "(no diff)"
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+
+
+def _provider_tree(cwd: Path, arg: str | None) -> str | None:
+    """`@tree` — depth-2 tree of CWD via shell `tree` if installed,
+    otherwise a manual implementation."""
+    # Prefer `tree` binary if available (cross-platform-ish)
+    try:
+        proc = subprocess.run(["tree", "-L", "2", str(cwd)],
+                              capture_output=True, text=True, timeout=8,
+                              encoding="utf-8", errors="replace")
+        if proc.returncode == 0:
+            return (proc.stdout or "")[:10_000]
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    # Fallback: manual depth-2 walk
+    lines: list[str] = [str(cwd)]
+    try:
+        for top in sorted(cwd.iterdir())[:50]:
+            if top.name.startswith("."):
+                continue
+            marker = "/" if top.is_dir() else ""
+            lines.append(f"  {top.name}{marker}")
+            if top.is_dir():
+                try:
+                    for sub in sorted(top.iterdir())[:20]:
+                        if sub.name.startswith("."):
+                            continue
+                        m2 = "/" if sub.is_dir() else ""
+                        lines.append(f"    {sub.name}{m2}")
+                except OSError:
+                    pass
+    except OSError:
+        return None
+    return "\n".join(lines)
+
+
+def _provider_problems(cwd: Path, arg: str | None) -> str | None:
+    """`@problems` — try common linters; first one that succeeds wins."""
+    for cmd in (
+        ["ruff", "check", "--quiet", str(cwd)],
+        ["mypy", "--show-error-codes", str(cwd)],
+        ["pyright", str(cwd)],
+    ):
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  timeout=15, encoding="utf-8", errors="replace")
+            out = (proc.stdout or "") + (proc.stderr or "")
+            if out.strip():
+                return f"$ {' '.join(cmd[:1])} ...\n{out[:10_000]}"
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            continue
+    return "(no linter found or no problems reported)"
+
+
+def _provider_cwd(cwd: Path, arg: str | None) -> str | None:
+    """`@cwd` — the absolute CWD path."""
+    return str(cwd)
+
+
+_PROVIDERS = {
+    "diff": _provider_diff,
+    "tree": _provider_tree,
+    "problems": _provider_problems,
+    "cwd": _provider_cwd,
+}
+
+
 def expand_file_refs(prompt: str, cwd: Path) -> tuple[str, list[dict[str, Any]]]:
-    """Find @-file references in the prompt; inject file contents.
+    """Find @-references in the prompt; inject file contents OR
+    provider output.
 
-    A token like `@README.md` or `@src/main.py` is treated as a path
-    reference if the file exists (relative to cwd). The matched paths
-    are read (up to MAX_FILE_REF_BYTES each) and prepended to the prompt
-    inside <file path="..."> blocks. The literal `@path` token is left
-    in the prompt as a textual reference for the model.
-
-    Non-existent paths, URLs, and email-like `@` usage are left alone.
+    Three resolver tiers:
+      1. `@diff`, `@diff:staged`, `@tree`, `@problems`, `@cwd` — named
+         providers (Continue.dev style). Each yields a context blob.
+      2. `@<path>` — if `path` exists as a file under cwd, inject as
+         a `<file path="...">` block (legacy @-file behavior).
+      3. Anything else — left as literal text.
     """
     seen: set[str] = set()
     refs: list[dict[str, Any]] = []
@@ -332,9 +416,21 @@ def expand_file_refs(prompt: str, cwd: Path) -> tuple[str, list[dict[str, Any]]]
         if not raw or raw in seen:
             continue
         seen.add(raw)
-        # Skip URL-ish tokens
         if "://" in raw:
             continue
+        # Provider tier: `@name` or `@name:arg`
+        provider_name, _, provider_arg = raw.partition(":")
+        provider = _PROVIDERS.get(provider_name)
+        if provider is not None:
+            content = provider(cwd, provider_arg if provider_arg else None)
+            if content is None:
+                continue
+            refs.append({
+                "token": raw, "kind": "provider", "name": provider_name,
+                "content": content, "path": f"@{raw}",
+            })
+            continue
+        # File tier
         candidate = Path(raw).expanduser()
         target = candidate if candidate.is_absolute() else (cwd / candidate)
         try:
@@ -345,15 +441,22 @@ def expand_file_refs(prompt: str, cwd: Path) -> tuple[str, list[dict[str, Any]]]
             continue
         if len(content) > MAX_FILE_REF_BYTES:
             content = content[:MAX_FILE_REF_BYTES] + "\n[...truncated]"
-        refs.append({"token": raw, "path": str(target), "content": content})
+        refs.append({"token": raw, "kind": "file", "path": str(target),
+                     "content": content})
 
     if not refs:
         return prompt, []
-
-    blocks = "\n".join(
-        f"<file path=\"{r['path']}\">\n{r['content']}\n</file>" for r in refs
-    )
-    augmented = f"{blocks}\n\n{prompt}"
+    blocks_parts: list[str] = []
+    for r in refs:
+        if r.get("kind") == "provider":
+            blocks_parts.append(
+                f"<context kind=\"{r['name']}\">\n{r['content']}\n</context>"
+            )
+        else:
+            blocks_parts.append(
+                f"<file path=\"{r['path']}\">\n{r['content']}\n</file>"
+            )
+    augmented = f"{chr(10).join(blocks_parts)}\n\n{prompt}"
     return augmented, refs
 
 

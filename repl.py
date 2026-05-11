@@ -43,6 +43,8 @@ Slash commands:
   /skills            list skills under .open-code/skills/
   /skill <n> [args]  run a skill by name; $ARGUMENTS / $1.. interpolated
   /agents            list subagents under .open-code/agents/ (use via the delegate tool)
+  /compact [keep]    summarize older history; keep last N msgs verbatim (default 10)
+  /effort [name]     show or set reasoning effort (low/medium/high/xhigh)
   /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
   /plan <task>       run <task> in plan mode (read-only); save result as a plan event
   /act [task]        load most recent plan; switch to acceptEdits; execute
@@ -293,6 +295,75 @@ def run_repl(
                 settings.mode = prior_mode
                 if metrics.get("model") and metrics["model"] != current_model:
                     current_model = metrics["model"]
+                continue
+            if cmd == "compact":
+                # Summarize older history; keep N most-recent msgs.
+                keep = 10
+                if rest:
+                    try:
+                        keep = max(2, int(rest))
+                    except ValueError:
+                        print(f"usage: /compact [keep_recent_msgs]")
+                        continue
+                full_history, _ = store.load_history(session, max_messages=0)
+                if len(full_history) <= keep:
+                    print(f"[only {len(full_history)} msgs; nothing to compact]")
+                    continue
+                dropped = full_history[:-keep]
+                kept = full_history[-keep:]
+                # Render dropped msgs as text for the summarizer
+                from google.genai import types as _types
+                from google import genai as _genai
+                stub_lines: list[str] = []
+                for m in dropped:
+                    role = m.role or "?"
+                    text_bits: list[str] = []
+                    for p in (m.parts or []):
+                        t = getattr(p, "text", None)
+                        if t:
+                            text_bits.append(t)
+                        else:
+                            fc = getattr(p, "function_call", None)
+                            fr = getattr(p, "function_response", None)
+                            if fc and getattr(fc, "name", None):
+                                text_bits.append(f"[tool {fc.name}({dict(fc.args) if fc.args else {}})]")
+                            elif fr and getattr(fr, "name", None):
+                                text_bits.append(f"[tool result {fr.name}: {dict(fr.response) if fr.response else {}}]")
+                    if text_bits:
+                        stub_lines.append(f"{role}: " + "\n".join(text_bits)[:500])
+                prompt = (
+                    "Summarize this prior conversation in 5-10 sentences. "
+                    "Focus on: what files exist now, what was decided, what's "
+                    "still TODO. Keep it tight; this becomes the model's "
+                    "memory replacement.\n\n---\n\n"
+                    + "\n\n".join(stub_lines)
+                )
+                try:
+                    client = _genai.Client(api_key=api_key)
+                    resp = client.models.generate_content(
+                        model=current_model,
+                        contents=prompt,
+                        config=_types.GenerateContentConfig(
+                            system_instruction="You summarize coding-session histories."
+                        ),
+                    )
+                    summary = resp.text if hasattr(resp, "text") else ""
+                except Exception as exc:
+                    print(f"[compact: summarization failed: {exc}]")
+                    continue
+                if not summary:
+                    print("[compact: model returned empty summary; aborting]")
+                    continue
+                store.append_compact(
+                    session, summary=summary, kept_recent=len(kept),
+                    dropped=len(dropped), model=current_model,
+                )
+                # Reload history so this REPL session uses the compacted form
+                history, _ = store.load_history(session, resume_max_messages)
+                print(
+                    f"[compacted: {len(dropped)} msgs -> {len(summary)}-char "
+                    f"summary; {len(kept)} recent msgs preserved]"
+                )
                 continue
             if cmd == "effort":
                 from settings import VALID_EFFORTS, Settings as _S
