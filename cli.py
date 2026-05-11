@@ -184,6 +184,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--quiet", "-q", action="store_true",
                         help="Suppress per-iteration trace.")
     parser.add_argument(
+        "--print", "-p", action="store_true", dest="print_json",
+        help="Non-interactive JSON-lines output mode (Tier 2 #20). "
+             "Emits one JSON object per line to stdout: session_start, "
+             "text, tool_use, tool_result, session_end. Implies --quiet "
+             "and --no-stream. Suitable for piping into other tools.",
+    )
+    parser.add_argument(
         "--show-metrics",
         action="store_true",
         help="Print token/iteration summary on completion.",
@@ -228,6 +235,15 @@ def main(argv: list[str] | None = None) -> int:
         settings.effort = args.effort
     if args.auto_checkpoint:
         settings.auto_checkpoint = True
+    if args.print_json:
+        # Implies --quiet and disables streaming so we emit one
+        # well-formed JSON object per logical event instead of mixing
+        # streamed text with our envelopes.
+        args.quiet = True
+        args.no_stream = True
+        CONFIG.print_json = True  # type: ignore[attr-defined]
+    else:
+        CONFIG.print_json = False  # type: ignore[attr-defined]
 
     # Start any MCP servers declared in settings.json
     mcp_client: MCPClient | None = None

@@ -32,6 +32,12 @@ class Config:
     allow_outside_cwd: bool = False
     allow_dangerous: bool = False
     cwd: Path = field(default_factory=Path.cwd)
+    # Tier 2 #14: status-line toggle (off by default)
+    statusline_on: bool = False
+    # Tier 2 #20: --print mode emits structured JSON events to stdout
+    # instead of human-readable text. Set by cli.main when --print is
+    # passed; read by open_code._emit_json in run_loop.
+    print_json: bool = False
 
 
 CONFIG = Config()

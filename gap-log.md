@@ -269,6 +269,16 @@ introduced a new concurrency bug, and hook-RCE was misclassified as
 
 **v0.18.0 ships 🟢.** Tier 2: 9 of 15 features done. Next: #20 `--print` JSON stream output (closes Batch B).
 
+---
+
+## v0.19.0 — 2026-05-11 (Tier 2 #20 — Batch B complete)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#20** | **`--print` / `-p` JSON output** (one JSON line per event to stdout: session_start, text, tool_use, tool_result, session_end; `--print` implies `--quiet` + `--no-stream`; `tools.Config.print_json` flag; `open_code._emit_json` helper with broken-pipe tolerance; emission points at run_loop entry, each text turn, each function_call, each tool result, run_loop `finally:` exit; gated `print()` on non-stream path to avoid mixing plain text with JSON envelopes) | ✅ | `tests/probe_print_mode.py` 4/4: `_emit_json` silent when print_json=False; emits valid JSON line when True; stubbed 2-turn `run_loop` produces session_start→text→tool_use→tool_result→text→session_end with all fields verified; print_json=False emits zero envelope events |
+
+**v0.19.0 ships 🟢.** Tier 2: 10 of 15 features done. **Batch B complete (4/4).** Next: Batch C — 5 features (#21-25).
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

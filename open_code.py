@@ -501,6 +501,22 @@ def _render_tool_result(name: str, result: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _emit_json(event_type: str, **fields: Any) -> None:
+    """Emit one JSON-lines event on stdout (Tier 2 #20 --print mode).
+
+    No-op when CONFIG.print_json is False. Always flushes after the
+    write so consumers can pipe with minimal buffering.
+    """
+    if not getattr(CONFIG, "print_json", False):
+        return
+    payload: dict[str, Any] = {"type": event_type, **fields}
+    try:
+        sys.stdout.write(json.dumps(payload, default=str) + "\n")
+        sys.stdout.flush()
+    except (OSError, ValueError):
+        pass  # broken pipe; we still want the agent loop to terminate cleanly
+
+
 def _persist_sticky_rule(cwd: Path, tool: str) -> None:
     """Persist a sticky `always` permission grant.
 
@@ -699,6 +715,15 @@ def run_loop(
 
     client = genai.Client(api_key=api_key)
 
+    # Tier 2 #20 --print: emit session_start envelope.
+    _emit_json(
+        "session_start",
+        session_id=(session.id if session else None),
+        model=model,
+        task=task[:500],
+        cwd=str(CONFIG.cwd),
+    )
+
     # SessionStart hook: only on the FIRST entry into the loop for a
     # session. cli.main / run_repl pass fire_session_start=True.
     if fire_session_start and session is not None:
@@ -855,7 +880,7 @@ def run_loop(
                             text = getattr(part, "text", None) or ""
                             if text:
                                 emitted.append(text)
-                    if emitted:
+                    if emitted and not getattr(CONFIG, "print_json", False):
                         print("".join(emitted))
             except Exception as exc:
                 if _is_model_unavailable_error(exc) and pending_fallbacks:
@@ -894,6 +919,20 @@ def run_loop(
                     input_tok=input_tok, output_tok=output_tok,
                 )
 
+            # Tier 2 #20 --print: emit model-text envelope when this
+            # turn produced any plain text (regardless of whether it
+            # also produced function_calls). One event per turn so
+            # consumers don't see streaming chunks.
+            if model_content.parts:
+                text_bits = [getattr(p, "text", None) or ""
+                             for p in model_content.parts]
+                joined = "".join(t for t in text_bits if t)
+                if joined:
+                    _emit_json(
+                        "text", iteration=iteration, text=joined,
+                        input_tokens=input_tok, output_tokens=output_tok,
+                    )
+
             # Status line (Tier 2 #14). Enabled when settings.statusline_template
             # is set, OR when verbose is True AND CONFIG.statusline_on
             # is True (set by --statusline).
@@ -913,6 +952,10 @@ def run_loop(
                     metrics["tool_calls"] += 1
                     if verbose:
                         print(_render_tool_call(name, args), file=sys.stderr)
+                    # Tier 2 #20 --print: emit tool_use BEFORE evaluating
+                    # permissions so consumers can correlate denials.
+                    _emit_json("tool_use", iteration=iteration,
+                               name=name, args=args)
 
                     # Permission rules (settings.json) — evaluated BEFORE
                     # PreToolUse hooks so deny/ask are deterministic.
@@ -1110,6 +1153,10 @@ def run_loop(
                             )
                     if verbose:
                         print(_render_tool_result(name, result), file=sys.stderr)
+                    # Tier 2 #20 --print: emit tool_result.
+                    _emit_json("tool_result", iteration=iteration,
+                               name=name, ok=bool(result.get("ok")),
+                               result=result)
 
                     hooks.fire(
                         "PostToolUse",
@@ -1183,6 +1230,20 @@ def run_loop(
                 session, exit_code=exit_code, iters=iteration,
                 wall_seconds=metrics["wall_seconds"],
             )
+        # Tier 2 #20 --print: emit session_end last so consumers see a
+        # complete envelope. We compute total tokens / iters from
+        # `metrics` which is the same dict returned to the caller.
+        _emit_json(
+            "session_end",
+            session_id=(session.id if session else None),
+            exit_code=exit_code,
+            iterations=iteration,
+            input_tokens=metrics.get("total_input_tokens", 0),
+            output_tokens=metrics.get("total_output_tokens", 0),
+            tool_calls=metrics.get("tool_calls", 0),
+            tool_errors=metrics.get("tool_errors", 0),
+            wall_seconds=round(metrics.get("wall_seconds", 0.0), 3),
+        )
 
     return exit_code, metrics
 
