@@ -125,6 +125,33 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 ---
 
+## v0.9.0 — 2026-05-11 (#6 Plan/Act)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#6** | **Plan/Act mode separation** (`/plan <task>` runs in plan mode + saves plan event; `/act` loads latest plan + switches to acceptEdits + executes) | ✅ | `tests/probe_plan_act.py` 5/5; live: `/plan write fizzbuzz` → narrative + plan event saved; `/act` → write_file + run_shell, file on disk with correct output |
+
+**v0.9.0 ships 🟢.**
+
+## Tier 1 status
+
+| # | Feature | Status |
+|---|---------|--------|
+| #1 | Hooks system | ✅ v0.5 |
+| #2 | Settings hierarchy + permissions | ✅ v0.6 |
+| #3 | Skills | ✅ v0.7 |
+| #4 | Subagents / Task tool | ⚪ |
+| #5 | Permission modes | ✅ v0.8 |
+| #6 | Plan/Act | ✅ v0.9 |
+| #7 | Repo-map | ⚪ |
+| #8 | V4A apply_patch | ⚪ |
+| #9 | Architect/editor split | ⚪ |
+| #10 | MCP server support | ⚪ |
+
+**5 of 10 Tier 1 features shipped.**
+
+---
+
 ## Carried gaps (still ⚪)
 
 - ⚪ Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save)

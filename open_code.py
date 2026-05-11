@@ -744,6 +744,8 @@ Slash commands:
   /skills            list skills under .open-code/skills/
   /skill <n> [args]  run a skill by name; $ARGUMENTS / $1.. interpolated
   /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
+  /plan <task>       run <task> in plan mode (read-only); save result as a plan event
+  /act [task]        load most recent plan; switch to acceptEdits; execute
 
 @-file references in prompts:
   Reference any local file with @path/to/file. open-code reads it and
@@ -874,6 +876,118 @@ def run_repl(
             if cmd == "skills":
                 import skills as _skills
                 print(_skills.render_skill_listing(_skills.discover_skills(cwd)))
+                continue
+            if cmd == "plan":
+                if not rest:
+                    print("usage: /plan <task description>")
+                    continue
+                if settings is None:
+                    from settings import Settings as _S
+                    settings = _S()
+                prior_mode = settings.mode
+                settings.mode = "plan"
+                plan_input = rest
+                # Run a single turn under plan mode (no file/shell side effects)
+                task_expanded, refs = expand_file_refs(plan_input, cwd)
+                if refs and not quiet:
+                    print(
+                        f"[expanded {len(refs)} @-file reference(s)]",
+                        file=sys.stderr,
+                    )
+                try:
+                    exit_code, metrics = run_loop(
+                        task=task_expanded,
+                        model=current_model, api_key=api_key,
+                        max_iterations=max_iterations,
+                        store=store, session=session,
+                        initial_history=history,
+                        verbose=not quiet, stream=stream,
+                        system_instruction=system_instruction,
+                        fire_session_start=(not history),
+                        settings=settings, is_repl=True,
+                    )
+                except KeyboardInterrupt:
+                    settings.mode = prior_mode
+                    print("\n[plan interrupted]", file=sys.stderr)
+                    continue
+                history, _ = store.load_history(session, resume_max_messages)
+                settings.mode = prior_mode
+                # Capture last model text as a plan event
+                last_model_text = ""
+                try:
+                    with session.path.open("r", encoding="utf-8") as f:
+                        for L in f:
+                            try:
+                                ev = json.loads(L)
+                            except Exception:
+                                continue
+                            if ev.get("kind") == "msg" and ev.get("role") == "model":
+                                tps = [p.get("text", "") for p in ev.get("parts", [])
+                                       if p.get("type") == "text"]
+                                if tps:
+                                    last_model_text = "\n".join(tps)
+                except OSError:
+                    pass
+                if last_model_text:
+                    import uuid as _uuid
+                    pid = _uuid.uuid4().hex[:8]
+                    store.append_plan(
+                        session, plan_id=pid,
+                        content=last_model_text, model=metrics.get("model", current_model),
+                    )
+                    if not quiet:
+                        print(f"[plan saved: id={pid}; /act to execute]",
+                              file=sys.stderr)
+                if metrics.get("model") and metrics["model"] != current_model:
+                    current_model = metrics["model"]
+                continue
+            if cmd == "act":
+                latest = store.latest_plan(session)
+                if not latest:
+                    print("no plan recorded in this session; use /plan first")
+                    continue
+                plan_id = latest.get("plan_id", "?")
+                plan_text = latest.get("content", "")
+                if settings is None:
+                    from settings import Settings as _S
+                    settings = _S()
+                prior_mode = settings.mode
+                settings.mode = "acceptEdits"
+                default_act_directive = (
+                    "Now execute the plan above. For every file the plan "
+                    "describes, call write_file with the exact path and "
+                    "content shown. For every shell command the plan "
+                    "describes, call run_shell. Do NOT describe what you "
+                    "would do — actually call the tools. After all tool "
+                    "calls succeed, give a one-line confirmation."
+                )
+                task_with_plan = (
+                    f"<plan id=\"{plan_id}\">\n{plan_text}\n</plan>\n\n"
+                    f"{rest if rest else default_act_directive}"
+                )
+                if not quiet:
+                    print(f"[acting on plan {plan_id}; mode=acceptEdits]",
+                          file=sys.stderr)
+                try:
+                    exit_code, metrics = run_loop(
+                        task=task_with_plan,
+                        model=current_model, api_key=api_key,
+                        max_iterations=max_iterations,
+                        store=store, session=session,
+                        initial_history=history,
+                        verbose=not quiet, stream=stream,
+                        system_instruction=system_instruction,
+                        fire_session_start=(not history),
+                        settings=settings, is_repl=True,
+                    )
+                except KeyboardInterrupt:
+                    settings.mode = prior_mode
+                    print("\n[act interrupted]", file=sys.stderr)
+                    continue
+                history, _ = store.load_history(session, resume_max_messages)
+                settings.mode = prior_mode
+                if metrics.get("model") and metrics["model"] != current_model:
+                    current_model = metrics["model"]
                 continue
             if cmd == "mode":
                 from settings import VALID_MODES

@@ -264,6 +264,41 @@ class SessionStore:
             },
         )
 
+    def append_plan(self, session: Session, *, plan_id: str,
+                    content: str, model: str) -> None:
+        """Record a Plan/Act 'plan' artifact in the session JSONL.
+
+        Written after a `/plan <task>` turn finishes; later read by
+        `/act` to inject as context under `<plan id=...>` tags.
+        """
+        self._append(
+            session,
+            {
+                "kind": "plan",
+                "plan_id": plan_id,
+                "model": model,
+                "content": content,
+                "ts": _now(),
+            },
+        )
+
+    def latest_plan(self, session: Session) -> dict[str, Any] | None:
+        """Return the most recent `plan` event payload (id, content, ts)
+        in the session's JSONL, or None if no plans recorded."""
+        latest: dict[str, Any] | None = None
+        try:
+            with session.path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        ev = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if ev.get("kind") == "plan":
+                        latest = ev
+        except OSError:
+            return None
+        return latest
+
     def append_tool_refusal(self, session: Session, *, tool: str,
                             reason: str, args_snippet: str) -> None:
         """Audit-trail entry: a tool call was refused by the security guards."""

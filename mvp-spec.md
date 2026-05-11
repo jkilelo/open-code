@@ -1,3 +1,31 @@
+# MVP spec — v0.9.0 (Plan/Act)
+
+> v0.9.0 (2026-05-11) implements Tier 1 #6 from
+> `roadmap/PROMPT-PACK.md`: Plan/Act workflow.
+>
+> Builds on v0.8's permission modes. Adds `/plan` and `/act` REPL
+> commands plus a new `plan` event kind in the JSONL.
+>
+> ## v0.9 new assertions
+>
+> A31 `/plan <task>` runs ONE turn in plan mode (write_file +
+>     run_shell denied). After the turn, the model's last text
+>     response is captured as a `plan` event with a UUID id.
+> A32 `/act [task]` calls `latest_plan(session)` to find the most
+>     recent plan event, switches to acceptEdits mode, and runs a
+>     turn with the prompt:
+>       <plan id="...">...</plan>
+>       <task OR default directive instructing the model to call
+>        write_file / run_shell, not narrate>
+> A33 `aggregate_metrics` does NOT count plan events in n_iters /
+>     n_fallbacks / n_refusals (matches the v0.3 invariant).
+>
+> ## Pre-commit
+>
+> `open_code.py` is at 991 lines (close to 1000). The next feature
+> extracts `repl.py` (run_repl + REPL_HELP + REPL_BANNER) before
+> adding scope.
+
 # MVP spec — v0.8.0 (Permission modes)
 
 > v0.8.0 (2026-05-11) implements Tier 1 #5 from
