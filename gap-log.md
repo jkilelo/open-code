@@ -164,6 +164,16 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 **v0.12.0 ships 🟢.** 8 of 10 Tier 1 features done.
 
+---
+
+## v0.13.0 — 2026-05-11 (#7 Repo-map, Python-only)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#7** | **Repo-map** (Aider-style symbol skeleton via stdlib `ast` + hand-rolled PageRank; Python only; zero deps; `<repo-map>` block injected into system instruction) | ✅ | `tests/probe_repomap.py` 9/9; live: against open-code's own repo produced a 3670-char skeleton with tools.py + patches.py + sessions.py at the top |
+
+**v0.13.0 ships 🟢.** 9 of 10 Tier 1 features done. **Only #10 MCP remaining.**
+
 ## Tier 1 status
 
 | # | Feature | Status |

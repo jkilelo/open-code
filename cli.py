@@ -105,6 +105,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable streaming output (one full response per iteration).",
     )
     parser.add_argument(
+        "--no-repomap",
+        action="store_true",
+        help="Disable the Aider-style repo-map symbol skeleton prepended to "
+             "the system instruction.",
+    )
+    parser.add_argument(
         "--root",
         default=os.environ.get("OPEN_CODE_ROOT", str(DEFAULT_OC_ROOT)),
         help=f"Sessions root dir (default: {DEFAULT_OC_ROOT}).",
@@ -230,6 +236,22 @@ def main(argv: list[str] | None = None) -> int:
     system_instruction = build_system_instruction(project_ctx, project_path)
     if project_path and not args.quiet:
         print(f"[loaded {project_path} as project context]", file=sys.stderr)
+
+    # Repo-map: append a symbol skeleton (Aider-style, Python only in v0.13)
+    if not args.no_repomap:
+        try:
+            from repomap import build_repomap
+            task_hint = " ".join(args.task) if args.task else None
+            rm = build_repomap(cwd, task_hint=task_hint)
+            if rm:
+                system_instruction += "\n\n## Repo symbol skeleton\n\n" + rm
+                if not args.quiet:
+                    print(f"[repo-map: included {rm.count('# ')} files]",
+                          file=sys.stderr)
+        except Exception as exc:
+            if not args.quiet:
+                print(f"[repo-map disabled: {type(exc).__name__}: {exc}]",
+                      file=sys.stderr)
 
     task = " ".join(args.task).strip()
     if not task:
