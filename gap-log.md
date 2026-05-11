@@ -95,6 +95,16 @@ User asked: "what other high impact feature from claude code can you add?" → "
 
 ---
 
+## v0.6.0 — 2026-05-10 (#2 Settings hierarchy + permission rules)
+
+| # | Feature | Status | Evidence |
+|---|---------|--------|----------|
+| **#2** | **Settings hierarchy + permission rules** (user → project → local, deny/ask/allow with fnmatch + regex matchers) | ✅ | `tests/probe_settings.py` 8/8 PASS; live: 3 tool calls denied by project rules, model adapts and surfaces restrictions to user |
+
+**v0.6.0 ships 🟢.**
+
+---
+
 ## Carried gaps (still ⚪)
 
 - ⚪ Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save)

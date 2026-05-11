@@ -365,9 +365,15 @@ def run_loop(
     stream: bool = True,
     system_instruction: str = SYSTEM_INSTRUCTION,
     fire_session_start: bool = False,
+    settings=None,  # type: ignore[no-untyped-def]  -- imported from settings.py in cli.main
+    is_repl: bool = False,
 ) -> tuple[int, dict[str, Any]]:
     """Run the agentic loop. Returns (exit_code, metrics)."""
     import hooks  # local import; cycle-safe
+    from settings import Settings, evaluate_permission
+
+    if settings is None:
+        settings = Settings()
 
     client = genai.Client(api_key=api_key)
 
@@ -513,12 +519,82 @@ def run_loop(
                     if verbose:
                         print(_render_tool_call(name, args), file=sys.stderr)
 
-                    pre = hooks.fire(
-                        "PreToolUse",
-                        CONFIG.cwd,
-                        session_id=(session.id if session else ""),
-                        payload={"tool": name, "args": args},
+                    # Permission rules (settings.json) — evaluated BEFORE
+                    # PreToolUse hooks so deny/ask are deterministic.
+                    decision, why = evaluate_permission(
+                        name, args, settings.permissions
                     )
+                    if decision == "deny":
+                        result = {"ok": False,
+                                  "error": f"permission denied ({why})"}
+                        metrics["tool_errors"] += 1
+                        if verbose:
+                            print(_render_tool_result(name, result), file=sys.stderr)
+                        if store is not None and session is not None:
+                            store.append_tool_refusal(
+                                session, tool=name,
+                                reason=f"permissions deny: {why}",
+                                args_snippet=_short(json.dumps(args), 200),
+                            )
+                        tool_result_parts.append(
+                            types.Part.from_function_response(name=name, response=result)
+                        )
+                        continue
+                    if decision == "ask":
+                        if not is_repl:
+                            result = {"ok": False,
+                                      "error": (f"permission requires confirmation "
+                                                f"({why}); declining in one-shot mode")}
+                            metrics["tool_errors"] += 1
+                            if verbose:
+                                print(_render_tool_result(name, result), file=sys.stderr)
+                            if store is not None and session is not None:
+                                store.append_tool_refusal(
+                                    session, tool=name,
+                                    reason=f"permissions ask declined: {why}",
+                                    args_snippet=_short(json.dumps(args), 200),
+                                )
+                            tool_result_parts.append(
+                                types.Part.from_function_response(name=name, response=result)
+                            )
+                            continue
+                        # REPL: prompt user
+                        try:
+                            ans = input(
+                                f"  ? {name}({_short(json.dumps(args), 60)}) "
+                                f"[allow/deny] (y/n): "
+                            ).strip().lower()
+                        except EOFError:
+                            ans = "n"
+                        if not ans.startswith("y"):
+                            result = {"ok": False,
+                                      "error": f"user declined ({why})"}
+                            metrics["tool_errors"] += 1
+                            if store is not None and session is not None:
+                                store.append_tool_refusal(
+                                    session, tool=name,
+                                    reason=f"user declined: {why}",
+                                    args_snippet=_short(json.dumps(args), 200),
+                                )
+                            tool_result_parts.append(
+                                types.Part.from_function_response(name=name, response=result)
+                            )
+                            continue
+                        # else fall through to hook + execution
+
+                    # PreToolUse hook (unless globally disabled)
+                    if settings.hooks_disabled:
+                        class _NoHook:
+                            block = False
+                            modified_args = None
+                        pre = _NoHook()  # type: ignore[assignment]
+                    else:
+                        pre = hooks.fire(
+                            "PreToolUse",
+                            CONFIG.cwd,
+                            session_id=(session.id if session else ""),
+                            payload={"tool": name, "args": args},
+                        )
                     if pre.block:
                         result = {"ok": False, "error": f"blocked by hook: {pre.reason}"}
                         metrics["tool_errors"] += 1
@@ -669,6 +745,7 @@ def run_repl(
     show_metrics: bool,
     initial_resume: bool,
     initial_resume_id: str | None,
+    settings=None,  # type: ignore[no-untyped-def]
 ) -> int:
     """Interactive REPL. Persistent session; each prompt becomes a task."""
     try:
@@ -814,6 +891,8 @@ def run_repl(
                 stream=stream,
                 system_instruction=system_instruction,
                 fire_session_start=is_first_turn,
+                settings=settings,
+                is_repl=True,
             )
         except KeyboardInterrupt:
             print("\n[interrupted; returning to prompt]", file=sys.stderr)

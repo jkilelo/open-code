@@ -14,6 +14,7 @@ from pathlib import Path
 from google.genai import types
 
 from sessions import Session, SessionStore, migrate_from_sqlite
+from settings import load_layered_settings
 from tools import CONFIG
 
 
@@ -137,6 +138,27 @@ def main(argv: list[str] | None = None) -> int:
     CONFIG.allow_outside_cwd = args.allow_outside_cwd
     CONFIG.allow_dangerous = args.allow_dangerous
 
+    # Layered settings: ~/.open-code → project → project-local.
+    # CLI flags + env vars STILL win (already applied above).
+    settings = load_layered_settings(cwd)
+    if settings.sources and not args.quiet:
+        print(
+            f"[loaded settings from {', '.join(str(p) for p in settings.sources)}]",
+            file=sys.stderr,
+        )
+    # If settings.model is set and the user didn't override on the CLI,
+    # honor it. (CLI default is DEFAULT_MODEL when --model wasn't passed.)
+    if settings.model and args.model == os.environ.get(
+        "OPEN_CODE_MODEL",
+        __import__("open_code").DEFAULT_MODEL,
+    ):
+        args.model = settings.model
+    if (settings.max_iterations is not None and
+            args.max_iterations == int(os.environ.get(
+                "OPEN_CODE_MAX_ITER",
+                __import__("open_code").DEFAULT_MAX_ITERATIONS))):
+        args.max_iterations = settings.max_iterations
+
     root = Path(args.root).expanduser()
     store = SessionStore(root)
 
@@ -191,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
             show_metrics=args.show_metrics,
             initial_resume=args.resume,
             initial_resume_id=args.resume_id,
+            settings=settings,
         )
 
     task_expanded, refs = expand_file_refs(task, cwd)
@@ -242,6 +265,8 @@ def main(argv: list[str] | None = None) -> int:
         stream=not args.no_stream,
         system_instruction=system_instruction,
         fire_session_start=True,
+        settings=settings,
+        is_repl=False,
     )
 
     if args.show_metrics:

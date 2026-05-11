@@ -1,3 +1,27 @@
+# MVP spec — v0.6.0 (Settings + permission rules)
+
+> v0.6.0 (2026-05-10) implements Tier 1 #2 from
+> `roadmap/PROMPT-PACK.md`: layered settings.json + permission rule
+> evaluation.
+>
+> New file: `settings.py` (167 lines).
+>
+> ## v0.6 new assertions
+>
+> A17 Settings load order: user (~/.open-code/settings.json) -> project
+>     (.open-code/settings.json) -> project-local
+>     (.open-code/settings.local.json). Later layers override earlier;
+>     permission lists union.
+> A18 `permissions.deny: ["run_shell(*ls*)"]` blocks matching tool
+>     calls; the model receives "permission denied (matched deny rule
+>     ...)" as a tool result error.
+> A19 `permissions.ask: [...]` prompts the user in REPL (y/n);
+>     auto-declines in one-shot mode.
+> A20 fnmatch matchers (`Tool(spec)`) match either the args
+>     JSON-string OR any string arg value. Regex matchers (`Tool(/re/)`)
+>     match the args JSON-string.
+> A21 `hooks.disabled: true` skips all PreToolUse / PostToolUse calls.
+
 # MVP spec — v0.5.0 (Hooks)
 
 > v0.5.0 (2026-05-10) implements Tier 1 #1 from
