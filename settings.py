@@ -60,6 +60,16 @@ def _managed_settings_paths() -> list[Path]:
     import os as _os
     import sys as _sys
     sep = ";" if _os.name == "nt" else ":"
+    # Legacy-name warning: if a user still has the pre-v0.24.2 env var
+    # set in their environment, they'd silently get production defaults.
+    # Emit a one-line stderr notice so they can rename it.
+    if _os.environ.get("OPEN_CODE_MANAGED_SETTINGS"):
+        _sys.stderr.write(
+            "[managed-settings: OPEN_CODE_MANAGED_SETTINGS is no longer "
+            "honored (security: rename caused by v0.24.2). Use "
+            "OPEN_CODE_MANAGED_SETTINGS_TEST for tests, or move your "
+            "managed.json to the conventional location.]\n"
+        )
     env_override = _os.environ.get("OPEN_CODE_MANAGED_SETTINGS_TEST")
     if env_override:
         _sys.stderr.write(

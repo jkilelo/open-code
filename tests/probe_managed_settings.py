@@ -148,4 +148,37 @@ with tempfile.TemporaryDirectory() as d:
 print("[PASS] multiple managed paths layered last-wins")
 
 
+# ===========================================================================
+# Test 6 (v0.24.3): legacy OPEN_CODE_MANAGED_SETTINGS is NOT honored AND
+# a stderr warning fires when it's set.
+# ===========================================================================
+import io
+from contextlib import redirect_stderr
+
+with tempfile.TemporaryDirectory() as d:
+    base = Path(d).resolve()
+    proj = base / ".open-code"
+    proj.mkdir()
+    (proj / "settings.json").write_text(json.dumps({
+        "model": "project-model",
+    }), encoding="utf-8")
+    mp = base / "legacy-managed.json"
+    mp.write_text(json.dumps({"model": "LEGACY-SHOULD-NOT-WIN"}),
+                  encoding="utf-8")
+    os.environ["OPEN_CODE_MANAGED_SETTINGS"] = str(mp)
+    os.environ.pop("OPEN_CODE_MANAGED_SETTINGS_TEST", None)
+    buf = io.StringIO()
+    try:
+        with redirect_stderr(buf):
+            s = S.load_layered_settings(base)
+    finally:
+        os.environ.pop("OPEN_CODE_MANAGED_SETTINGS", None)
+    assert s.model == "project-model", \
+        f"legacy env var must NOT be honored; got s.model={s.model!r}"
+    warning = buf.getvalue()
+    assert "OPEN_CODE_MANAGED_SETTINGS is no longer honored" in warning, \
+        f"expected legacy-var stderr warning; got: {warning[:200]!r}"
+print("[PASS] legacy OPEN_CODE_MANAGED_SETTINGS ignored AND warns to stderr")
+
+
 print("\nOK -- managed-settings probes passed.")

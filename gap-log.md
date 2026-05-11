@@ -389,6 +389,23 @@ The brutal review of v0.14.2→v0.24.0 returned **FAIL** with 3 claimed blockers
 
 **v0.24.2 ships 🟢.** All brutal-review carry items closed. 42/42 probes green.
 
+---
+
+## v0.24.3 — 2026-05-11 (3rd brutal review: PASS WITH BLEMISHES)
+
+Third brutal review traced every claim in scope to actual code. No new blockers found. Most claimed issues refuted (notably: the seq-drift-after-compact claim — verified seq stays monotonic 0..6 across a compact event).
+
+| Item | Status | Evidence |
+|---|---|---|
+| Legacy `OPEN_CODE_MANAGED_SETTINGS` silently ignored | ✅ now emits stderr warning | `probe_managed_settings.py` test 6: legacy var set → project model wins (legacy ignored) AND stderr contains "no longer honored" |
+| Post-compact seq numbers might drift (reviewer claim) | ✅ refuted + regression guard added | `probe_session_perf.py` test 5: 5 msgs + compact + 2 msgs → seq `[0,1,2,3,4,5,6]` monotonic+contiguous |
+
+Intentionally deferred:
+- `s=session` sticky still tool-name granular (pre-existing asymmetry, not a v0.24.x regression)
+- Subagent transcript cache priming (cold-scan correctness is fine; O(1) optimization wouldn't move the needle for ≤8-turn subagent runs)
+
+**v0.24.3 ships 🟢.** 42/42 probes green.
+
 ## Remaining 🟡 (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

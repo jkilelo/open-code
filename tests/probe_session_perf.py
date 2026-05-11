@@ -133,4 +133,36 @@ with tempfile.TemporaryDirectory() as d:
 print("[PASS] resume scans exactly once, then caches")
 
 
+# ===========================================================================
+# Test 5: 3rd-brutal-review probe — post-compact seq numbers stay
+# monotonic and contiguous across all msg events in the file.
+# This was claimed as a bug by the reviewer; the assertion below
+# verifies the claim was wrong and guards against future regressions.
+# ===========================================================================
+with tempfile.TemporaryDirectory() as d:
+    store = SX.SessionStore(Path(d).resolve())
+    s = store.create("/tmp/x", "fake", "post-compact seq test")
+    # Write 5 messages, then a compact event, then 2 more messages
+    for i in range(5):
+        store.append_message(s, _new_msg("user", f"old {i}"))
+    store.append_compact(s, summary="...", kept_recent=2, dropped=3,
+                          model="fake")
+    for i in range(2):
+        store.append_message(s, _new_msg("user", f"new {i}"))
+    # All 7 msg events on disk should have seq 0..6
+    seqs: list[int] = []
+    with s.path.open("r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                ev = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if ev.get("kind") == "msg":
+                seqs.append(ev["seq"])
+    assert seqs == list(range(7)), (
+        f"post-compact seq must stay monotonic + contiguous; got {seqs}"
+    )
+print("[PASS] seq numbers stay monotonic+contiguous across a compact event")
+
+
 print("\nOK -- session-perf probes passed.")

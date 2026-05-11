@@ -283,6 +283,12 @@ class SessionStore:
         `dropped` = number of old messages condensed into `summary`.
         Subsequent --resume sees this event and replaces the dropped
         history with the summary as a single synthetic user message.
+
+        Note: `/compact` does NOT remove msg events from disk — it
+        only appends a `kind:"compact"` event that `load_history`
+        honors when reconstructing. So `_msg_counts` stays accurate
+        (it counts physical msg events, which don't disappear). Seq
+        numbers across the file remain monotonic and contiguous.
         """
         self._append(
             session,
