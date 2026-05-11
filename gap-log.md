@@ -69,6 +69,34 @@ User asked: swap to JSONL + bring useful design patterns from Claude Code.
 
 ---
 
+## v0.4.0 — 2026-05-10 (REPL + OPEN_CODE.md + @-file refs + tools.py extraction)
+
+User asked: "what other high impact feature from claude code can you add?" → "do all three".
+
+| Feature | Status | Evidence |
+|---------|--------|----------|
+| **Interactive REPL mode** (no-arg invocation → conversation; /help, /clear, /sessions, /switch, /cost, /model, /dump, /exit) | ✅ shipped | runs § Test 2: REPL with cross-turn memory + slash command dispatch |
+| **OPEN_CODE.md project context** (auto-loaded from CWD or ancestor; appended to system instruction) | ✅ shipped | runs § Test 2: hello.py written with type hints + docstring because OPEN_CODE.md said so; `probe_project_context.py` 6/6 |
+| **@-file references in prompts** (`@README.md` reads + injects file before model sees the prompt) | ✅ shipped | runs § Test 1; `probe_file_refs.py` 8/8 |
+| **`tools.py` extraction** (v0.3 pre-commitment) | ✅ shipped | 970 + 479 + 344 = 1793 across 3 files; max single file under 1000 |
+
+**v0.4.0 ships 🟢.**
+
+---
+
+## Carried gaps (still ⚪)
+
+- ⚪ Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save)
+- ⚪ Multi-LLM support (Mara persona trigger)
+- ⚪ Tool allowlist mode + `--ask` interactive permission prompts
+- ⚪ Hooks (PreToolUse / PostToolUse / Stop / SessionStart) — kit uses these; bigger lift
+- ⚪ MCP server protocol
+- ⚪ Pyright `reportUnknownMemberType` warnings (cosmetic)
+
+Pre-commitment for v0.5: open_code.py is at 970 — one new flag could push it over. Next addition extracts `cli.py` (~150 LOC argparse + main glue) or another module first.
+
+---
+
 ## Carried gaps (still ⚪)
 
 - ⚪ Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save with rebuild logic on resume)

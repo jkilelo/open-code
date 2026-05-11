@@ -4,7 +4,7 @@ import os, sys, tempfile, shutil
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from open_code import CONFIG, tool_write_file
+from tools import CONFIG, tool_write_file
 
 # ---- 1) Symlink escape ----
 print("=== Symlink escape ===")

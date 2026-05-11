@@ -1,3 +1,24 @@
+# MVP spec — v0.4.0 (extends v0.3.0)
+
+> v0.4.0 (2026-05-10) brings three high-impact Claude-Code-style
+> features on top of v0.3.0's storage rewrite:
+>
+> 1. **Interactive REPL mode**: `open_code` with no task drops into a
+>    persistent conversation. `/help`, `/clear`, `/sessions`, `/switch`,
+>    `/cost`, `/model`, `/dump`, `/exit` slash commands.
+> 2. **`OPEN_CODE.md` project context**: auto-loads from CWD or any
+>    ancestor; appended to the system instruction so the project's
+>    conventions stick across all invocations.
+> 3. **`@-file` references in prompts**: `summarize @README.md` reads
+>    the file and injects it as a `<file path="...">` block alongside
+>    the prompt. URLs, missing paths, and trailing punctuation handled
+>    correctly. Dedup so repeated refs don't double-inject.
+>
+> Plus an extraction: `tools.py` carved out of `open_code.py` (per the
+> v0.3 pre-commitment when the file grew past 1000 lines).
+> File sizes: `open_code.py` 970, `sessions.py` 479, `tools.py` 344.
+> Total: 1793 across 3 files; max single file still under 1000.
+
 # MVP spec — v0.3.0 (extends v0.2.1)
 
 > v0.3.0 (2026-05-10) switches session storage from SQLite to JSONL,

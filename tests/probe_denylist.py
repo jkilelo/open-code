@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from open_code import _dangerous_match
+from tools import _dangerous_match
 
 c = "C" + ":"
 USERS = c + "\\Users"
