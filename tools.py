@@ -475,12 +475,160 @@ TOOL_DECLARATIONS.append(FIND_SPECIALIST_DECL)
 TOOL_DECLARATIONS.append(REQUEST_SPECIALIST_DECL)
 
 
+# ---------------------------------------------------------------------------
+# LSP tools (Tier 3 #28 -- language-server-backed code intelligence)
+# ---------------------------------------------------------------------------
+# Each tool routes to the LSPClient (configured via settings.lsp) and
+# returns a structured result. If LSP isn't enabled or no server is
+# configured for the file's language, the tool returns {ok: False,
+# error: ...} -- never crashes the agent loop.
+
+LSP_DIAGNOSTICS_DECL: dict = {
+    "name": "lsp_diagnostics",
+    "description": (
+        "Return type-checker / linter diagnostics (errors, warnings, "
+        "hints) for a source file via its configured language server "
+        "(e.g. pyright for Python). Returns a list of {severity, "
+        "message, line, col, code, source} entries. Use BEFORE editing "
+        "a file to see what's broken, or AFTER editing to verify the "
+        "change didn't introduce new errors. Lines/cols are 0-indexed."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Path to a source file (relative or absolute).",
+            },
+        },
+        "required": ["path"],
+    },
+}
+
+
+LSP_HOVER_DECL: dict = {
+    "name": "lsp_hover",
+    "description": (
+        "Get type information and docstring at a source position via "
+        "the configured language server. Useful for: 'what's the type "
+        "of this variable', 'what does this function return', 'what "
+        "does this third-party API actually accept'. Cheaper than "
+        "reading the whole file. Lines/cols are 0-indexed."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Source file path."},
+            "line": {"type": "integer", "description": "0-indexed line."},
+            "col":  {"type": "integer", "description": "0-indexed column."},
+        },
+        "required": ["path", "line", "col"],
+    },
+}
+
+
+LSP_DEFINITION_DECL: dict = {
+    "name": "lsp_definition",
+    "description": (
+        "Jump to the definition of the symbol at a position. Returns "
+        "a list of {path, line, col} locations -- usually one, but "
+        "overloaded symbols can have several. Faster than grep when "
+        "you need 'where is this function defined' across a large repo. "
+        "Lines/cols are 0-indexed."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Source file path."},
+            "line": {"type": "integer", "description": "0-indexed line."},
+            "col":  {"type": "integer", "description": "0-indexed column."},
+        },
+        "required": ["path", "line", "col"],
+    },
+}
+
+
+LSP_REFERENCES_DECL: dict = {
+    "name": "lsp_references",
+    "description": (
+        "Find all references to the symbol at a position. Includes "
+        "the declaration itself. Use for impact analysis before "
+        "renaming or refactoring -- 'what would break if I change "
+        "this'. Returns a list of {path, line, col} locations. "
+        "Lines/cols are 0-indexed."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Source file path."},
+            "line": {"type": "integer", "description": "0-indexed line."},
+            "col":  {"type": "integer", "description": "0-indexed column."},
+        },
+        "required": ["path", "line", "col"],
+    },
+}
+
+
+TOOL_DECLARATIONS.append(LSP_DIAGNOSTICS_DECL)
+TOOL_DECLARATIONS.append(LSP_HOVER_DECL)
+TOOL_DECLARATIONS.append(LSP_DEFINITION_DECL)
+TOOL_DECLARATIONS.append(LSP_REFERENCES_DECL)
+
+
+# LSP tool dispatchers. Each fetches the global LSPClient and delegates.
+# If LSP isn't configured, return ok=False rather than crashing.
+
+def _lsp_dispatch(method_name: str, **kwargs: Any) -> dict[str, Any]:
+    try:
+        from lsp import get_lsp_client
+    except ImportError:
+        return {"ok": False, "error": "lsp module unavailable"}
+    client = get_lsp_client()
+    if client is None:
+        return {
+            "ok": False,
+            "error": (
+                "LSP is not enabled. Set settings.lsp.enabled=true and "
+                "configure a server (e.g. pyright-langserver --stdio for "
+                "Python) under settings.lsp.servers."
+            ),
+        }
+    fn = getattr(client, method_name, None)
+    if fn is None:
+        return {"ok": False, "error": f"unknown LSP method: {method_name}"}
+    try:
+        return fn(**kwargs)
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"{type(exc).__name__}: {exc}"}
+
+
+def tool_lsp_diagnostics(path: str) -> dict[str, Any]:
+    return _lsp_dispatch("lsp_diagnostics", path=path)
+
+
+def tool_lsp_hover(path: str, line: int, col: int) -> dict[str, Any]:
+    return _lsp_dispatch("lsp_hover", path=path, line=line, col=col)
+
+
+def tool_lsp_definition(path: str, line: int, col: int) -> dict[str, Any]:
+    return _lsp_dispatch("lsp_definition", path=path, line=line, col=col)
+
+
+def tool_lsp_references(path: str, line: int, col: int) -> dict[str, Any]:
+    return _lsp_dispatch("lsp_references", path=path, line=line, col=col)
+
+
 TOOL_FUNCTIONS = {
     "read_file": tool_read_file,
     "write_file": tool_write_file,
     "list_dir": tool_list_dir,
     "run_shell": tool_run_shell,
     "apply_patch": tool_apply_patch,
+    "lsp_diagnostics": tool_lsp_diagnostics,
+    "lsp_hover":       tool_lsp_hover,
+    "lsp_definition":  tool_lsp_definition,
+    "lsp_references":  tool_lsp_references,
 }
 # Note: find_specialist + request_specialist are dispatched specially
 # in open_code._dispatch_tool (they need access to the model client

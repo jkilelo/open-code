@@ -377,6 +377,63 @@ arg values), `Tool(/regex/)` (regex search). Evaluation order is
 `deny > always_allow > ask > allow > default-allow`. `always_allow`
 is what the REPL's `[always]` prompt option writes.
 
+## LSP (Language Server Protocol) integration (v0.32+)
+
+Configure language servers under `settings.lsp` and the agent gets
+four new tools for code intelligence:
+
+| Tool | What it does |
+|---|---|
+| `lsp_diagnostics(path)` | All errors / warnings / hints for a file |
+| `lsp_hover(path, line, col)` | Type + docstring at a position |
+| `lsp_definition(path, line, col)` | Jump-to-definition (1+ locations) |
+| `lsp_references(path, line, col)` | All references including the declaration |
+
+Example config (pyright for Python):
+
+```json
+{
+  "lsp": {
+    "enabled": true,
+    "servers": {
+      "python": {
+        "command": "pyright-langserver",
+        "args": ["--stdio"],
+        "file_patterns": ["*.py", "*.pyi"]
+      }
+    }
+  }
+}
+```
+
+Install pyright with `pip install pyright`. Other language servers
+that speak stdio JSON-RPC work the same way -- swap `command` /
+`args` / `file_patterns`:
+
+```json
+"servers": {
+  "rust": {"command": "rust-analyzer", "file_patterns": ["*.rs"]},
+  "go":   {"command": "gopls", "file_patterns": ["*.go"]},
+  "ts":   {"command": "typescript-language-server", "args": ["--stdio"],
+           "file_patterns": ["*.ts", "*.tsx", "*.js", "*.jsx"]}
+}
+```
+
+Servers spawn lazily on first matching `lsp_*` tool call. Pyright
+cold-starts in 5-10s (TypeScript JIT + project scan); subsequent
+calls in the same session are fast. The diagnostics tool polls
+until pyright's two-phase publish settles (empty list -> real
+list), so the first call on a fresh server can take 3-5s.
+
+Disable per-invocation with `--no-lsp` or `OPEN_CODE_NO_LSP=1`.
+
+Lines/cols returned by all four tools are **0-indexed** (LSP spec).
+That matches what the model sees in stack traces, so no translation
+is needed.
+
+Live-verified: `tests/_live_lsp_check.py` -- runs all four tools
+against real pyright on a sample file with a deliberate type error.
+
 ## Project memory (OPEN_CODE.md)
 
 Drop an `OPEN_CODE.md` in your project root with project-specific

@@ -115,6 +115,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Don't spawn MCP servers declared in settings.json.",
     )
     parser.add_argument(
+        "--no-lsp",
+        action="store_true",
+        help="Don't start language servers from settings.lsp.servers. "
+             "Tools lsp_diagnostics/hover/definition/references will "
+             "return ok=False this session.",
+    )
+    parser.add_argument(
         "--trust-hooks",
         action="store_true",
         help="Allow this project's .open-code/hooks/ to run for this "
@@ -361,6 +368,21 @@ def main(argv: list[str] | None = None) -> int:
         mcp_client = MCPClient()
         mcp_client.start_servers(mcp_servers_cfg)
         set_mcp_client(mcp_client)
+
+    # Configure the LSP client (lazy-spawn -- servers don't start until
+    # the first lsp_* tool call). Reads settings.lsp; honors
+    # --no-lsp / OPEN_CODE_NO_LSP for one-off disable.
+    lsp_cfg = settings.raw.get("lsp") if settings.raw else None
+    lsp_disabled = (
+        getattr(args, "no_lsp", False)
+        or os.environ.get("OPEN_CODE_NO_LSP", "").strip()
+    )
+    if lsp_cfg and not lsp_disabled:
+        from lsp import LSPClient, set_lsp_client
+        lsp_client = LSPClient(cwd=cwd)
+        lsp_client.configure(lsp_cfg)
+        if lsp_client.config:  # only register if at least one server cfg present
+            set_lsp_client(lsp_client)
 
     # Hook trust gate. If the project ships .open-code/hooks/, prompt
     # the user for consent (or auto-deny in one-shot mode). This is the
