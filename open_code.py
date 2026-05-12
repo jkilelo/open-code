@@ -74,16 +74,15 @@ try:
 except ImportError:
     pass
 
-try:
-    from google import genai
-    from google.genai import types
-except ImportError as exc:
-    sys.stderr.write(
-        "open-code: missing dependency `google-genai`. Install with:\n"
-        "    pip install -r requirements.txt\n"
-        f"  (import error: {exc})\n"
-    )
-    sys.exit(2)
+# LLM access goes through the neutral protocol in llm.py. We never
+# import google.genai directly here -- the GeminiClient adapter in
+# llm_gemini.py owns that coupling. Swapping providers is a config
+# change (settings.llm.provider).
+from llm import (
+    LLMClient, LLMError, LLMCallError, LLMConfigError,
+    Message, Part, ToolDecl, Usage, AskResult, StreamChunk,
+    make_llm_client, default_model_for,
+)
 
 from sessions import Session, SessionStore, migrate_from_sqlite
 from tools import (
@@ -630,58 +629,95 @@ def _persist_sticky_rule(cwd: Path, tool: str,
     return rule
 
 
-def _new_user_content(text: str) -> types.Content:
-    return types.Content(role="user", parts=[types.Part.from_text(text=text)])
+def _new_user_content(text: str) -> Message:
+    return Message(role="user", parts=[Part.make_text(text)])
+
+
+def _make_llm_from_settings(settings: Any, api_key: str) -> LLMClient:
+    """Build an LLMClient honoring settings.llm.* with a Gemini fallback.
+
+    Settings shape (read from `settings.raw.llm` block which the
+    Settings dataclass exposes verbatim):
+        {
+          "llm": {
+            "provider": "gemini",         // gemini | anthropic | openai | ollama
+            "model": "gemini-3.1-...",    // optional; falls back to provider default
+            "api_key_env": "GEMINI_API_KEY"  // optional
+          }
+        }
+    """
+    raw = getattr(settings, "raw", {}) or {}
+    cfg = raw.get("llm") if isinstance(raw, dict) else None
+    if not isinstance(cfg, dict):
+        cfg = {}
+    provider = (cfg.get("provider") or "gemini").lower()
+    api_key_env = cfg.get("api_key_env")
+    # If the caller passed api_key directly (legacy path from
+    # cli.main which reads GEMINI_API_KEY explicitly), prefer it.
+    # Otherwise let make_llm_client resolve via env.
+    return make_llm_client(
+        provider=provider,
+        api_key=(api_key or None),
+        api_key_env=api_key_env,
+        extra=cfg.get("extra"),
+    )
 
 
 def _stream_iter_response(
-    client: genai.Client,
+    llm: LLMClient,
     *,
     model: str,
-    history: list[types.Content],
-    config: types.GenerateContentConfig,
+    history: list[Message],
+    system_instruction: str,
+    tools: list[ToolDecl] | None,
+    thinking_budget: int | None,
     verbose: bool,
-) -> tuple[list[types.Part], list[Any], Any]:
-    """Stream the model response. Print text as it arrives.
+) -> tuple[list[Part], Usage | None]:
+    """Stream a model response through the neutral LLMClient.ask_stream.
 
-    Returns (all_parts, function_calls, last_usage_metadata).
+    Accumulates streamed text deltas (printing as they arrive) and
+    collects tool_calls. Returns (all_parts, final_usage).
+
+    Provider-agnostic by construction: this function never touches
+    google.genai.types or any provider-specific shape. Every
+    LLMClient implementation yields the same StreamChunk type.
     """
-    all_parts: list[types.Part] = []
-    function_calls: list[Any] = []
-    usage = None
-    stream = client.models.generate_content_stream(
-        model=model, contents=history, config=config
-    )
+    text_buffer: list[str] = []
+    tool_calls: list[Part] = []
+    last_usage: Usage | None = None
     saw_text = False
+    stream = llm.ask_stream(
+        model=model, messages=history,
+        system_instruction=system_instruction, tools=tools,
+        thinking_budget=thinking_budget,
+    )
     for chunk in stream:
-        cand = getattr(chunk, "candidates", None)
-        if cand:
-            content = cand[0].content
-            if content is not None:
-                for part in content.parts or []:
-                    all_parts.append(part)
-                    fc = getattr(part, "function_call", None)
-                    if fc is not None and getattr(fc, "name", None):
-                        function_calls.append(fc)
-                    else:
-                        text = getattr(part, "text", None) or ""
-                        if text:
-                            if not saw_text:
-                                saw_text = True
-                            sys.stdout.write(text)
-                            sys.stdout.flush()
-        meta = getattr(chunk, "usage_metadata", None)
-        if meta is not None:
-            usage = meta
+        if chunk.text_delta:
+            text_buffer.append(chunk.text_delta)
+            if not getattr(CONFIG, "print_json", False):
+                if not saw_text:
+                    saw_text = True
+                sys.stdout.write(chunk.text_delta)
+                sys.stdout.flush()
+        for tc in chunk.tool_calls:
+            tool_calls.append(tc)
+        if chunk.usage is not None:
+            last_usage = chunk.usage
     if saw_text:
         sys.stdout.write("\n")
         sys.stdout.flush()
-    return all_parts, function_calls, usage
+    all_parts: list[Part] = []
+    full_text = "".join(text_buffer)
+    if full_text:
+        all_parts.append(Part.make_text(full_text))
+    all_parts.extend(tool_calls)
+    return all_parts, last_usage
 
 
 def _handle_find_specialist(
     args: dict[str, Any], *, cwd: Path,
     api_key: str = "", settings: Any = None,
+    llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     """Tool: BM25 search for matching specialists.
 
@@ -705,10 +741,13 @@ def _handle_find_specialist(
     # Optional semantic rerank. Off by default; opt in via
     # settings.autobuild.semantic_search = true. Falls back silently
     # to pure BM25 if the embedding call fails.
-    if results and _autobuild_semantic(settings) and api_key:
+    if results and _autobuild_semantic(settings) and (llm_client is not None or api_key):
         try:
             import agent_embed as _embed
-            embedder = _embed.make_genai_embedder(api_key)
+            if llm_client is not None:
+                embedder = _embed.make_llm_embedder(llm_client)
+            else:
+                embedder = _embed.make_genai_embedder(api_key)
             results = _embed.search_hybrid(
                 cwd, query, bm25_results=results, embedder=embedder,
             )
@@ -767,13 +806,17 @@ def _handle_request_specialist(
     default_model: str,
     settings: Any,
     ui: Any,
+    llm_client: LLMClient,
 ) -> dict[str, Any]:
     """Tool: build a new specialist agent via the architect meta-prompt.
 
-    Wraps `agent_builder.build_agent` with the live genai client as
-    the LLM callable. Emits both stderr UI feedback and the JSON
-    `agent_built` envelope when --print mode is active.
+    Uses the same LLMClient the main loop is configured with -- so the
+    architect call honors the same provider/model as the user's primary
+    work. Emits stderr UI feedback + the JSON `agent_built` envelope
+    when --print mode is active.
     """
+    # Local alias so the inner _llm closure can reference it cleanly.
+    _llm_client = llm_client
     if not _autobuild_enabled(settings):
         return {
             "ok": False,
@@ -795,23 +838,15 @@ def _handle_request_specialist(
         getattr(settings, "architect_model", None) or default_model
     )
 
+    # Build a thin string-in/string-out callable that delegates to
+    # the same LLMClient instance the main loop is using. The
+    # architect meta-prompt is one-shot, no tools, no streaming.
     def _llm(prompt: str) -> str:
-        client = genai.Client(api_key=api_key)
-        resp = client.models.generate_content(
-            model=architect_model, contents=prompt,
+        msg = Message(role="user", parts=[Part.make_text(prompt)])
+        result = _llm_client.ask(
+            model=architect_model, messages=[msg],
         )
-        text = getattr(resp, "text", None)
-        if not text:
-            # Older SDK shapes
-            try:
-                cand = resp.candidates[0]
-                text = "".join(
-                    getattr(p, "text", "") or ""
-                    for p in (cand.content.parts or [])
-                )
-            except Exception:
-                text = ""
-        return text or ""
+        return result.message.text()
 
     if ui is not None and hasattr(ui, "autobuild_start"):
         ui.autobuild_start(domain=domain, task=task_example)
@@ -925,6 +960,7 @@ def _handle_delegate_call(
     cwd: Path,
     system_instruction: str,
     settings,
+    llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     """Execute the `delegate` tool. Returns a normal tool-result dict."""
     import subagents as _subagents
@@ -962,6 +998,7 @@ def _handle_delegate_call(
             fire_session_start=False,
             tool_allowlist=(agent.allowed_tools or None),
             expose_delegate=False,  # no recursion
+            llm=llm_client,
         )
     except Exception as exc:
         return {"ok": False,
@@ -1006,18 +1043,25 @@ def run_loop(
     max_iterations: int,
     store: SessionStore | None,
     session: Session | None,
-    initial_history: list[types.Content] | None = None,
+    initial_history: list[Message] | None = None,
     verbose: bool = True,
     stream: bool = True,
     system_instruction: str = SYSTEM_INSTRUCTION,
     fire_session_start: bool = False,
-    settings=None,  # type: ignore[no-untyped-def]  -- imported from settings.py in cli.main
+    settings=None,  # type: ignore[no-untyped-def]
     is_repl: bool = False,
     tool_allowlist: list[str] | None = None,
     expose_delegate: bool = True,
     ui=None,  # type: ignore[no-untyped-def]
+    llm: LLMClient | None = None,
 ) -> tuple[int, dict[str, Any]]:
-    """Run the agentic loop. Returns (exit_code, metrics)."""
+    """Run the agentic loop. Returns (exit_code, metrics).
+
+    `llm` is the neutral LLM client. When None, we lazily build one
+    from settings (gemini default). Callers (cli.main, repl) supply
+    a single client so all loop invocations in a process share the
+    same provider/model resolution.
+    """
     import hooks  # local import; cycle-safe
     from settings import Settings, evaluate_permission
     import subagents as _subagents
@@ -1025,9 +1069,6 @@ def run_loop(
 
     if settings is None:
         settings = Settings()
-    # Lazy-init a UI if the caller didn't supply one. Auto-detects
-    # rich vs plain based on stderr's TTY-ness. JSON mode follows
-    # CONFIG.print_json (existing --print path).
     if ui is None:
         ui = _UICls.auto(
             plain=False,
@@ -1036,7 +1077,10 @@ def run_loop(
             stderr=True,
         )
 
-    client = genai.Client(api_key=api_key)
+    # Build the LLM client if the caller didn't supply one. Reads
+    # settings.llm if present; falls back to Gemini + env-var key.
+    if llm is None:
+        llm = _make_llm_from_settings(settings, api_key)
 
     # Tier 2 #20 --print: emit session_start envelope.
     _emit_json(
@@ -1090,10 +1134,9 @@ def run_loop(
             if verbose:
                 sys.stderr.write(f"[checkpoint error: {exc}]\n")
 
-    # Build the effective TOOL_DECLARATIONS list:
-    # - Apply tool_allowlist if provided (subagent restriction)
-    # - Append the delegate tool unless we're a subagent (no recursion)
-    # - Append every MCP server's tools (namespaced)
+    # Build the effective tool list as neutral ToolDecl objects.
+    # `TOOL_DECLARATIONS` is still dict-shaped (JSON schema form)
+    # for back-compat with MCP + delegate; we wrap each into ToolDecl.
     effective_decls: list[dict[str, Any]] = []
     for decl in TOOL_DECLARATIONS:
         if tool_allowlist is None or decl["name"] in tool_allowlist:
@@ -1104,7 +1147,14 @@ def run_loop(
         for d in _MCP_CLIENT.all_tool_declarations():
             effective_decls.append(d)
 
-    tools = [types.Tool(function_declarations=effective_decls)]
+    tools_neutral: list[ToolDecl] = [
+        ToolDecl(
+            name=d["name"],
+            description=d.get("description", ""),
+            parameters=d.get("parameters", {}),
+        )
+        for d in effective_decls
+    ]
 
     # Effort level -> thinking_budget. `ultrathink` in the user's task
     # bumps THIS turn's budget to the max (then we strip it from the
@@ -1119,24 +1169,10 @@ def run_loop(
             r"\b" + re.escape(ULTRATHINK_MARKER) + r"\b", "", task, flags=re.I
         ).strip()
 
-    def _build_config(turn_budget: int):
-        cfg_kwargs: dict[str, Any] = {
-            "tools": tools,
-            "system_instruction": system_instruction,
-        }
-        try:
-            # Older SDK versions might not have ThinkingConfig; guard.
-            tc_cls = getattr(types, "ThinkingConfig", None)
-            if tc_cls is not None and turn_budget > 0:
-                cfg_kwargs["thinking_config"] = tc_cls(thinking_budget=turn_budget)
-        except Exception:
-            pass
-        return types.GenerateContentConfig(**cfg_kwargs)
-
     initial_budget = ULTRATHINK_BUDGET if one_shot_ultrathink else base_budget
-    config = _build_config(initial_budget)
+    current_thinking_budget = initial_budget
 
-    history: list[types.Content] = list(initial_history or [])
+    history: list[Message] = list(initial_history or [])
     user_msg = _new_user_content(task)
     history.append(user_msg)
     if store is not None and session is not None:
@@ -1204,39 +1240,33 @@ def run_loop(
                     with ui.thinking(
                         f"iter {iteration}: {current_model}..."
                     ):
-                        all_parts, function_calls, usage = _stream_iter_response(
-                            client, model=current_model, history=history,
-                            config=config, verbose=verbose,
+                        all_parts, usage = _stream_iter_response(
+                            llm, model=current_model, history=history,
+                            system_instruction=system_instruction,
+                            tools=tools_neutral,
+                            thinking_budget=current_thinking_budget,
+                            verbose=verbose,
                         )
-                    model_content = types.Content(role="model", parts=all_parts)
+                    model_content = Message(role="model", parts=all_parts)
+                    function_calls = model_content.tool_calls()
                 else:
                     with ui.thinking(
                         f"iter {iteration}: {current_model}..."
                     ):
-                        response = client.models.generate_content(
-                            model=current_model, contents=history,
-                            config=config,
+                        result = llm.ask(
+                            model=current_model, messages=history,
+                            system_instruction=system_instruction,
+                            tools=tools_neutral,
+                            thinking_budget=current_thinking_budget,
                         )
-                    usage = getattr(response, "usage_metadata", None)
-                    if not response.candidates:
-                        sys.stderr.write("open-code: model returned no candidates\n")
-                        exit_code = 4
-                        break
-                    model_content = response.candidates[0].content
-                    if model_content is None:
+                    usage = result.usage
+                    model_content = result.message
+                    if not model_content.parts:
                         sys.stderr.write("open-code: model returned empty content\n")
                         exit_code = 4
                         break
-                    function_calls = []
-                    emitted = []
-                    for part in model_content.parts or []:
-                        fc = getattr(part, "function_call", None)
-                        if fc is not None and getattr(fc, "name", None):
-                            function_calls.append(fc)
-                        else:
-                            text = getattr(part, "text", None) or ""
-                            if text:
-                                emitted.append(text)
+                    function_calls = model_content.tool_calls()
+                    emitted = [p.text for p in model_content.parts if p.is_text() and p.text]
                     if emitted and not getattr(CONFIG, "print_json", False):
                         print("".join(emitted))
             except Exception as exc:
@@ -1257,14 +1287,14 @@ def run_loop(
                     metrics["model"] = current_model
                     iteration -= 1  # retry this step under the new model
                     continue
-                sys.stderr.write(f"open-code: Gemini call failed: {type(exc).__name__}: {exc}\n")
+                sys.stderr.write(f"open-code: LLM call failed: {type(exc).__name__}: {exc}\n")
                 exit_code = 3
                 break
 
             input_tok = output_tok = 0
             if usage is not None:
-                input_tok = getattr(usage, "prompt_token_count", 0) or 0
-                output_tok = getattr(usage, "candidates_token_count", 0) or 0
+                input_tok = usage.input_tokens or 0
+                output_tok = usage.output_tokens or 0
                 metrics["total_input_tokens"] += input_tok
                 metrics["total_output_tokens"] += output_tok
 
@@ -1281,9 +1311,7 @@ def run_loop(
             # also produced function_calls). One event per turn so
             # consumers don't see streaming chunks.
             if model_content.parts:
-                text_bits = [getattr(p, "text", None) or ""
-                             for p in model_content.parts]
-                joined = "".join(t for t in text_bits if t)
+                joined = model_content.text()
                 if joined:
                     _emit_json(
                         "text", iteration=iteration, text=joined,
@@ -1304,10 +1332,10 @@ def run_loop(
                 )
 
             if function_calls:
-                tool_result_parts: list[types.Part] = []
+                tool_result_parts: list[Part] = []
                 for fc in function_calls:
-                    name = fc.name
-                    args = dict(fc.args) if fc.args else {}
+                    name = fc.tool_name
+                    args = dict(fc.tool_args) if fc.tool_args else {}
                     metrics["tool_calls"] += 1
                     if verbose:
                         ui.tool_call(name, args)
@@ -1360,7 +1388,7 @@ def run_loop(
                                 args_snippet=_short(json.dumps(args), 200),
                             )
                         tool_result_parts.append(
-                            types.Part.from_function_response(name=name, response=result)
+                            Part.make_tool_result(name, result)
                         )
                         continue
                     if decision == "ask":
@@ -1378,7 +1406,7 @@ def run_loop(
                                     args_snippet=_short(json.dumps(args), 200),
                                 )
                             tool_result_parts.append(
-                                types.Part.from_function_response(name=name, response=result)
+                                Part.make_tool_result(name, result)
                             )
                             continue
                         # REPL: prompt user.
@@ -1449,7 +1477,7 @@ def run_loop(
                                     args_snippet=_short(json.dumps(args), 200),
                                 )
                             tool_result_parts.append(
-                                types.Part.from_function_response(name=name, response=result)
+                                Part.make_tool_result(name, result)
                             )
                             continue
                         # else fall through to hook + execution
@@ -1480,7 +1508,7 @@ def run_loop(
                                 args_snippet=_short(json.dumps(args), 200),
                             )
                         tool_result_parts.append(
-                            types.Part.from_function_response(name=name, response=result)
+                            Part.make_tool_result(name, result)
                         )
                         continue
                     if pre.modified_args:
@@ -1493,13 +1521,14 @@ def run_loop(
                             args, parent_session=session, store=store,
                             api_key=api_key, default_model=current_model,
                             cwd=CONFIG.cwd, system_instruction=system_instruction,
-                            settings=settings,
+                            settings=settings, llm_client=llm,
                         )
                     elif name == "find_specialist":
                         # Tier 3: BM25 search across the agent library.
                         result = _handle_find_specialist(
                             args, cwd=CONFIG.cwd,
                             api_key=api_key, settings=settings,
+                            llm_client=llm,
                         )
                     elif name == "request_specialist":
                         # Tier 3: build a new specialist on demand.
@@ -1507,6 +1536,7 @@ def run_loop(
                             args, cwd=CONFIG.cwd,
                             api_key=api_key, default_model=current_model,
                             settings=settings, ui=ui,
+                            llm_client=llm,
                         )
                     elif name.startswith("mcp__") and _MCP_CLIENT is not None:
                         result = _MCP_CLIENT.call_tool(name, args)
@@ -1546,10 +1576,10 @@ def run_loop(
                     )
 
                     tool_result_parts.append(
-                        types.Part.from_function_response(name=name, response=result)
+                        Part.make_tool_result(name, result)
                     )
 
-                tool_content = types.Content(role="user", parts=tool_result_parts)
+                tool_content = Message(role="user", parts=tool_result_parts)
                 history.append(tool_content)
                 if store is not None and session is not None:
                     store.append_message(session, tool_content)

@@ -246,6 +246,20 @@ def make_genai_embedder(api_key: str,
     return _embed
 
 
+def make_llm_embedder(llm_client: Any,
+                      model: str = "text-embedding-004") -> Embedder:
+    """Build an Embedder backed by the neutral LLMClient protocol.
+
+    Provider-agnostic: works with any client that implements
+    `llm.LLMClient` (Gemini, OpenAI, etc). Embedding model name is
+    provider-specific; default is Google's. Override via the
+    `settings.autobuild.embedding_model` knob.
+    """
+    def _embed(texts: list[str]) -> list[Vector]:
+        return llm_client.embed(model=model, texts=texts)
+    return _embed
+
+
 def search_hybrid(
     cwd: Path,
     query: str,

@@ -11,8 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-from google.genai import types
-
+from llm import Message
 from sessions import Session, SessionStore, migrate_from_sqlite
 from settings import load_layered_settings
 from tools import CONFIG
@@ -428,15 +427,17 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
 
+    # Build the LLMClient up-front based on settings.llm (provider,
+    # api_key_env, etc). The api_key string is also kept around so
+    # legacy code paths (delegate, embedder) that take a raw key still
+    # work. Default provider is gemini.
+    from llm import LLMConfigError
+    from open_code import _make_llm_from_settings
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        sys.stderr.write(
-            "open-code: GEMINI_API_KEY is not set. Either:\n"
-            "  export GEMINI_API_KEY=your-key   (POSIX)\n"
-            "  $env:GEMINI_API_KEY = 'your-key' (PowerShell)\n"
-            "  or put it in a .env file in this directory.\n"
-            "Get one at https://aistudio.google.com/app/apikey\n"
-        )
+    try:
+        llm_client = _make_llm_from_settings(settings, api_key)
+    except LLMConfigError as exc:
+        sys.stderr.write(f"open-code: {exc}\n")
         return 1
 
     layers = load_project_layers(cwd)
@@ -493,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
             initial_resume_id=args.resume_id,
             settings=settings,
             ui=ui,
+            llm=llm_client,
         )
 
     task_expanded, refs = expand_file_refs(task, cwd)
@@ -504,7 +506,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     session: Session | None = None
-    initial_history: list[types.Content] = []
+    initial_history: list[Message] = []
     if args.resume_id:
         session = store.find_by_id(args.resume_id)
         if session is None:
@@ -552,6 +554,7 @@ def main(argv: list[str] | None = None) -> int:
             settings=settings,
             is_repl=False,
             ui=ui,
+            llm=llm_client,
         )
         # Always-on concise turn summary (every run knows what it
         # cost). --show-metrics is now redundant but kept for the

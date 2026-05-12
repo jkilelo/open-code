@@ -1,8 +1,9 @@
 """Probe: --print JSON output mode (Tier 2 #20).
 
 Runs run_loop with CONFIG.print_json = True and verifies the JSON
-events emitted on stdout. Uses a stubbed Gemini client so the probe
-is hermetic.
+events emitted on stdout. Uses a stubbed LLMClient so the probe is
+hermetic. Post-decoupling, this stubs the neutral protocol -- no
+provider-specific shapes leak into the test.
 """
 from __future__ import annotations
 import io
@@ -11,7 +12,6 @@ import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -20,7 +20,7 @@ import open_code as OC
 import sessions as SX
 import tools as TOOLS
 from settings import Settings
-from google.genai import types as _t
+from llm import AskResult, Message, Part, Usage
 
 
 def _parse_jsonl(s: str) -> list[dict]:
@@ -64,6 +64,33 @@ print("[PASS] _emit_json writes a JSON line when print_json=True")
 # ===========================================================================
 # Test 3: run_loop emits the full event sequence under --print
 # ===========================================================================
+class TwoTurnFakeClient:
+    """Turn 1: text + tool_call(run_shell). Turn 2: plain text done."""
+    provider = "fake"
+
+    def __init__(self):
+        self._n = 0
+
+    def ask(self, **kw):
+        self._n += 1
+        if self._n == 1:
+            msg = Message(role="model", parts=[
+                Part.make_text("I'll run echo."),
+                Part.make_tool_call("run_shell", {"command": "echo hi"}),
+            ])
+            usage = Usage(input_tokens=10, output_tokens=5)
+        else:
+            msg = Message(role="model", parts=[Part.make_text("Done.")])
+            usage = Usage(input_tokens=12, output_tokens=7)
+        return AskResult(message=msg, usage=usage, stop_reason="stop")
+
+    def ask_stream(self, **kw):
+        yield from ()  # not used (stream=False)
+
+    def embed(self, **kw):
+        return []
+
+
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
     store_root = base / "store"
@@ -77,58 +104,13 @@ with tempfile.TemporaryDirectory() as d:
         "ok": True, "stdout": "stub-out", "exit_code": 0,
     }
 
-    # Stub: turn 1 calls run_shell; turn 2 emits text + stop
-    call_count = {"n": 0}
-
-    class _Resp1:
-        usage_metadata = type("U", (), {
-            "prompt_token_count": 10, "candidates_token_count": 5,
-        })()
-        def __init__(self):
-            self.candidates = [type("C", (), {
-                "content": _t.Content(
-                    role="model",
-                    parts=[
-                        _t.Part.from_text(text="I'll run echo."),
-                        _t.Part.from_function_call(
-                            name="run_shell",
-                            args={"command": "echo hi"},
-                        ),
-                    ],
-                )
-            })()]
-
-    class _Resp2:
-        usage_metadata = type("U", (), {
-            "prompt_token_count": 12, "candidates_token_count": 7,
-        })()
-        def __init__(self):
-            self.candidates = [type("C", (), {
-                "content": _t.Content(
-                    role="model",
-                    parts=[_t.Part.from_text(text="Done.")],
-                )
-            })()]
-
-    class _StubModels:
-        def generate_content(self, **kwargs):
-            call_count["n"] += 1
-            return _Resp2() if call_count["n"] >= 2 else _Resp1()
-        def generate_content_stream(self, **kwargs):
-            return iter([])
-
-    class _StubClient:
-        def __init__(self, **kwargs):
-            self.models = _StubModels()
-
     TOOLS.CONFIG.print_json = True
     prior_cwd = TOOLS.CONFIG.cwd
     TOOLS.CONFIG.cwd = base
 
     buf = io.StringIO()
     try:
-        with patch("open_code.genai.Client", _StubClient), \
-             redirect_stdout(buf):
+        with redirect_stdout(buf):
             OC.run_loop(
                 task="please run echo",
                 model="fake-model", api_key="x",
@@ -137,6 +119,7 @@ with tempfile.TemporaryDirectory() as d:
                 fire_session_start=False,
                 settings=Settings(),
                 is_repl=False,
+                llm=TwoTurnFakeClient(),
             )
     finally:
         TOOLS.CONFIG.print_json = False
@@ -172,6 +155,22 @@ print("[PASS] run_loop emits expected JSON event sequence under --print")
 # ===========================================================================
 # Test 4: print_json off -> no events on stdout
 # ===========================================================================
+class SilentFakeClient:
+    provider = "fake"
+
+    def ask(self, **kw):
+        return AskResult(
+            message=Message(role="model", parts=[Part.make_text("ok")]),
+            usage=Usage(), stop_reason="stop",
+        )
+
+    def ask_stream(self, **kw):
+        yield from ()
+
+    def embed(self, **kw):
+        return []
+
+
 TOOLS.CONFIG.print_json = False
 with tempfile.TemporaryDirectory() as d:
     base = Path(d).resolve()
@@ -180,30 +179,11 @@ with tempfile.TemporaryDirectory() as d:
     store = SX.SessionStore(store_root)
     s = store.create(str(base), "fake-model", "silent test")
 
-    class _StubResp:
-        usage_metadata = None
-        def __init__(self):
-            self.candidates = [type("C", (), {
-                "content": _t.Content(role="model",
-                                      parts=[_t.Part.from_text(text="ok")])
-            })()]
-
-    class _StubModels:
-        def generate_content(self, **kwargs):
-            return _StubResp()
-        def generate_content_stream(self, **kwargs):
-            return iter([])
-
-    class _StubClient:
-        def __init__(self, **kwargs):
-            self.models = _StubModels()
-
     prior_cwd = TOOLS.CONFIG.cwd
     TOOLS.CONFIG.cwd = base
     buf = io.StringIO()
     try:
-        with patch("open_code.genai.Client", _StubClient), \
-             redirect_stdout(buf):
+        with redirect_stdout(buf):
             OC.run_loop(
                 task="quiet", model="fake-model", api_key="x",
                 max_iterations=2, store=store, session=s,
@@ -211,6 +191,7 @@ with tempfile.TemporaryDirectory() as d:
                 fire_session_start=False,
                 settings=Settings(),
                 is_repl=False,
+                llm=SilentFakeClient(),
             )
     finally:
         TOOLS.CONFIG.cwd = prior_cwd

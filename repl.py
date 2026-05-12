@@ -19,8 +19,7 @@ import uuid as _uuid
 from pathlib import Path
 from typing import Any
 
-from google.genai import types
-
+from llm import LLMClient, Message, Part
 from sessions import Session, SessionStore
 
 
@@ -88,6 +87,7 @@ def run_repl(
     initial_resume_id: str | None,
     settings: Any = None,
     ui: Any = None,
+    llm: LLMClient | None = None,
 ) -> int:
     """Interactive REPL. Persistent session; each prompt becomes a task."""
     # Late imports of open_code symbols to avoid a cycle at module load.
@@ -101,8 +101,13 @@ def run_repl(
     except ImportError:
         pass
 
+    # Lazily build LLMClient if caller didn't supply one.
+    if llm is None:
+        from open_code import _make_llm_from_settings
+        llm = _make_llm_from_settings(settings, api_key)
+
     session: Session | None = None
-    initial_history: list[types.Content] = []
+    initial_history: list[Message] = []
     if initial_resume_id:
         session = store.find_by_id(initial_resume_id)
         if session is None:
@@ -129,7 +134,7 @@ def run_repl(
     ui.banner(session_id=session.id, cwd=str(cwd), model=model)
 
     current_model = model
-    history: list[types.Content] = list(initial_history)
+    history: list[Message] = list(initial_history)
 
     # Slash commands offered as tab-completions in the prompt_toolkit
     # path. Kept in sync with the dispatch below; missing ones just
@@ -296,6 +301,7 @@ def run_repl(
                         system_instruction=system_instruction,
                         fire_session_start=(not history),
                         settings=settings, is_repl=True, ui=ui,
+                        llm=llm,
                     )
                 except KeyboardInterrupt:
                     settings.mode = prior_mode
@@ -372,6 +378,7 @@ def run_repl(
                         system_instruction=system_instruction,
                         fire_session_start=(not history),
                         settings=settings, is_repl=True, ui=ui,
+                        llm=llm,
                     )
                 except KeyboardInterrupt:
                     settings.mode = prior_mode
@@ -397,24 +404,23 @@ def run_repl(
                     continue
                 dropped = full_history[:-keep]
                 kept = full_history[-keep:]
-                # Render dropped msgs as text for the summarizer
-                from google.genai import types as _types
-                from google import genai as _genai
+                # Render dropped msgs as text for the summarizer.
+                # Provider-agnostic via the neutral Message/Part shape.
                 stub_lines: list[str] = []
                 for m in dropped:
                     role = m.role or "?"
                     text_bits: list[str] = []
-                    for p in (m.parts or []):
-                        t = getattr(p, "text", None)
-                        if t:
-                            text_bits.append(t)
-                        else:
-                            fc = getattr(p, "function_call", None)
-                            fr = getattr(p, "function_response", None)
-                            if fc and getattr(fc, "name", None):
-                                text_bits.append(f"[tool {fc.name}({dict(fc.args) if fc.args else {}})]")
-                            elif fr and getattr(fr, "name", None):
-                                text_bits.append(f"[tool result {fr.name}: {dict(fr.response) if fr.response else {}}]")
+                    for p in m.parts:
+                        if p.is_text() and p.text:
+                            text_bits.append(p.text)
+                        elif p.is_tool_call():
+                            text_bits.append(
+                                f"[tool {p.tool_name}({dict(p.tool_args) if p.tool_args else {}})]"
+                            )
+                        elif p.is_tool_result():
+                            text_bits.append(
+                                f"[tool result {p.tool_name}: {dict(p.tool_result) if p.tool_result else {}}]"
+                            )
                     if text_bits:
                         stub_lines.append(f"{role}: " + "\n".join(text_bits)[:500])
                 prompt = (
@@ -425,15 +431,13 @@ def run_repl(
                     + "\n\n".join(stub_lines)
                 )
                 try:
-                    client = _genai.Client(api_key=api_key)
-                    resp = client.models.generate_content(
+                    msg = Message(role="user", parts=[Part.make_text(prompt)])
+                    result = llm.ask(
                         model=current_model,
-                        contents=prompt,
-                        config=_types.GenerateContentConfig(
-                            system_instruction="You summarize coding-session histories."
-                        ),
+                        messages=[msg],
+                        system_instruction="You summarize coding-session histories.",
                     )
-                    summary = resp.text if hasattr(resp, "text") else ""
+                    summary = result.message.text()
                 except Exception as exc:
                     print(f"[compact: summarization failed: {exc}]")
                     continue
@@ -796,6 +800,7 @@ def run_repl(
                                 system_instruction=system_instruction,
                                 fire_session_start=False,
                                 settings=settings, is_repl=True, ui=ui,
+                                llm=llm,
                             )
                         except KeyboardInterrupt:
                             return False
@@ -905,6 +910,7 @@ def run_repl(
                 settings=settings,
                 is_repl=True,
                 ui=ui,
+                llm=llm,
             )
         except KeyboardInterrupt:
             print("\n[interrupted; returning to prompt]", file=sys.stderr)

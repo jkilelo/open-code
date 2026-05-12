@@ -188,43 +188,30 @@ with tempfile.TemporaryDirectory() as d:
         "ok": True, "stdout": "stub", "exit_code": 0,
     }
 
-    # Stub Gemini client: turn 1 makes a run_shell call; turn 2 stops.
-    from google.genai import types as _t
-    call_count = {"n": 0}
+    # Fake LLMClient: turn 1 emits a run_shell tool_call; turn 2 stops.
+    from llm import AskResult, Message, Part, Usage
 
-    class _Resp1:
-        usage_metadata = None
+    class _StickyFakeClient:
+        provider = "fake"
+
         def __init__(self):
-            self.candidates = [type("C", (), {
-                "content": _t.Content(
-                    role="model",
-                    parts=[_t.Part.from_function_call(
-                        name="run_shell",
-                        args={"command": "echo hi"},
-                    )],
-                )
-            })()]
+            self._n = 0
 
-    class _Resp2:
-        usage_metadata = None
-        def __init__(self):
-            self.candidates = [type("C", (), {
-                "content": _t.Content(
-                    role="model",
-                    parts=[_t.Part.from_text(text="done")],
-                )
-            })()]
+        def ask(self, **kw):
+            self._n += 1
+            if self._n == 1:
+                msg = Message(role="model", parts=[
+                    Part.make_tool_call("run_shell", {"command": "echo hi"}),
+                ])
+            else:
+                msg = Message(role="model", parts=[Part.make_text("done")])
+            return AskResult(message=msg, usage=Usage(), stop_reason="stop")
 
-    class _StubModels:
-        def generate_content(self, **kwargs):
-            call_count["n"] += 1
-            return _Resp2() if call_count["n"] >= 2 else _Resp1()
-        def generate_content_stream(self, **kwargs):
-            return iter([])
+        def ask_stream(self, **kw):
+            yield from ()
 
-    class _StubClient:
-        def __init__(self, **kwargs):
-            self.models = _StubModels()
+        def embed(self, **kw):
+            return []
 
     prior_cwd = OC.CONFIG.cwd
     OC.CONFIG.cwd = base
@@ -234,8 +221,7 @@ with tempfile.TemporaryDirectory() as d:
             raise AssertionError(
                 "input() was called -- sticky-session bypass failed"
             )
-        with patch("open_code.genai.Client", _StubClient), \
-             patch("builtins.input", _no_prompt):
+        with patch("builtins.input", _no_prompt):
             exit_code, metrics = OC.run_loop(
                 task="run echo", model="fake", api_key="x",
                 max_iterations=4, store=store, session=s,
@@ -243,6 +229,7 @@ with tempfile.TemporaryDirectory() as d:
                 fire_session_start=False,
                 settings=st, is_repl=True,  # CRUCIAL: is_repl=True
                                             # so the ask path is reachable
+                llm=_StickyFakeClient(),
             )
         assert exit_code == 0
         assert metrics["tool_calls"] >= 1

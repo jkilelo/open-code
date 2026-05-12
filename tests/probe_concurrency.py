@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from sessions import SessionStore
-from google.genai import types
+from llm import Message, Part
 
 store_root = Path(tempfile.mkdtemp(prefix="occonc-"))
 errors = []
@@ -15,7 +15,7 @@ def worker(idx: int):
         store = SessionStore(store_root)
         session = store.create("/tmp/concurrent", "gemini-x", f"task {idx}")
         for i in range(20):
-            msg = types.Content(role="user", parts=[types.Part.from_text(text=f"w{idx} m{i}")])
+            msg = Message(role="user", parts=[Part.make_text(f"w{idx} m{i}")])
             store.append_message(session, msg)
     except Exception as e:
         errors.append((idx, type(e).__name__, str(e)))

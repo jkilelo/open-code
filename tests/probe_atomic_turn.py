@@ -6,13 +6,15 @@ Tests:
   - turn-end snapshot survives KeyboardInterrupt mid-loop.
   - SessionStore.recent_checkpoints(phase="turn-start") returns
     events newest-first for /undo lookup.
+
+Post-decoupling: uses fake LLMClients implementing the neutral
+protocol; no patching of genai.Client. The agent loop is the same.
 """
 from __future__ import annotations
 import shutil
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -21,9 +23,45 @@ import checkpoints as CK
 import sessions as SX
 import open_code as OC
 from settings import Settings
+from llm import AskResult, Message, Part, Usage
 
 
 _HAVE_GIT = shutil.which("git") is not None
+
+
+class OkFakeClient:
+    """LLMClient stub that always returns a single text 'ok' message."""
+    provider = "fake"
+
+    def __init__(self, text: str = "ok done"):
+        self._text = text
+
+    def ask(self, **kw):
+        return AskResult(
+            message=Message(role="model", parts=[Part.make_text(self._text)]),
+            usage=Usage(), stop_reason="stop",
+        )
+
+    def ask_stream(self, **kw):
+        yield from ()
+
+    def embed(self, **kw):
+        return []
+
+
+class BoomFakeClient:
+    """Raises KeyboardInterrupt on every call. Probes the turn-end
+    snapshot-in-finally behavior."""
+    provider = "fake"
+
+    def ask(self, **kw):
+        raise KeyboardInterrupt("simulated Ctrl-C")
+
+    def ask_stream(self, **kw):
+        raise KeyboardInterrupt("simulated Ctrl-C")
+
+    def embed(self, **kw):
+        return []
 
 
 # ===========================================================================
@@ -64,46 +102,19 @@ else:
         store = SX.SessionStore(store_root)
         s = store.create(str(base), "fake", "atomic-turn test")
 
-        # Stub Gemini client so we never call the live API.
-        class _StubChunk:
-            def __init__(self, parts=None, usage=None):
-                self.candidates = []
-                self.usage_metadata = usage
-
-        class _StubResp:
-            candidates = []
-            usage_metadata = None
-            def __init__(self):
-                from google.genai import types as _t
-                self.candidates = [type("C", (), {
-                    "content": _t.Content(role="model",
-                                          parts=[_t.Part.from_text(text="ok done")])
-                })()]
-
-        class _StubModels:
-            def generate_content(self, **kwargs):
-                return _StubResp()
-            def generate_content_stream(self, **kwargs):
-                return iter([])  # streaming off path
-
-        class _StubClient:
-            def __init__(self, **kwargs):
-                self.models = _StubModels()
-
         st = Settings(auto_checkpoint=True)
-        # Point CONFIG.cwd at our test dir
         prior_cwd = OC.CONFIG.cwd
         OC.CONFIG.cwd = base
         try:
-            with patch("open_code.genai.Client", _StubClient):
-                OC.run_loop(
-                    task="hello atomic",
-                    model="fake", api_key="x",
-                    max_iterations=2, store=store, session=s,
-                    verbose=False, stream=False,
-                    fire_session_start=False,
-                    settings=st, is_repl=False,
-                )
+            OC.run_loop(
+                task="hello atomic",
+                model="fake", api_key="x",
+                max_iterations=2, store=store, session=s,
+                verbose=False, stream=False,
+                fire_session_start=False,
+                settings=st, is_repl=False,
+                llm=OkFakeClient(),
+            )
         finally:
             OC.CONFIG.cwd = prior_cwd
 
@@ -113,7 +124,6 @@ else:
         assert len(te) == 1, f"expected 1 turn-end, got {len(te)}"
         assert ts[0]["sha"] != te[0]["sha"], \
             "turn-start and turn-end should be distinct commits"
-        # Both should be resolvable in the shadow repo
         assert CK.resolve_ref(base, ts[0]["sha"]) is not None
         assert CK.resolve_ref(base, te[0]["sha"]) is not None
     print("[PASS] run_loop emits both turn-start AND turn-end checkpoints")
@@ -132,33 +142,23 @@ else:
         store = SX.SessionStore(store_root)
         s = store.create(str(base), "fake", "exception-during-turn")
 
-        class _BoomModels:
-            def generate_content(self, **kwargs):
-                raise KeyboardInterrupt("simulated Ctrl-C")
-            def generate_content_stream(self, **kwargs):
-                raise KeyboardInterrupt("simulated Ctrl-C")
-
-        class _BoomClient:
-            def __init__(self, **kwargs):
-                self.models = _BoomModels()
-
         st = Settings(auto_checkpoint=True)
         prior_cwd = OC.CONFIG.cwd
         OC.CONFIG.cwd = base
         try:
-            with patch("open_code.genai.Client", _BoomClient):
-                raised = False
-                try:
-                    OC.run_loop(
-                        task="boom", model="fake", api_key="x",
-                        max_iterations=2, store=store, session=s,
-                        verbose=False, stream=False,
-                        fire_session_start=False,
-                        settings=st, is_repl=False,
-                    )
-                except KeyboardInterrupt:
-                    raised = True
-                assert raised, "expected the simulated Ctrl-C to propagate"
+            raised = False
+            try:
+                OC.run_loop(
+                    task="boom", model="fake", api_key="x",
+                    max_iterations=2, store=store, session=s,
+                    verbose=False, stream=False,
+                    fire_session_start=False,
+                    settings=st, is_repl=False,
+                    llm=BoomFakeClient(),
+                )
+            except KeyboardInterrupt:
+                raised = True
+            assert raised, "expected the simulated Ctrl-C to propagate"
         finally:
             OC.CONFIG.cwd = prior_cwd
 
@@ -184,37 +184,18 @@ else:
         store = SX.SessionStore(store_root)
         s = store.create(str(base), "fake", "no-ckpt run")
 
-        class _StubResp:
-            usage_metadata = None
-            def __init__(self):
-                from google.genai import types as _t
-                self.candidates = [type("C", (), {
-                    "content": _t.Content(role="model",
-                                          parts=[_t.Part.from_text(text="ok")])
-                })()]
-
-        class _StubModels:
-            def generate_content(self, **kwargs):
-                return _StubResp()
-            def generate_content_stream(self, **kwargs):
-                return iter([])
-
-        class _StubClient:
-            def __init__(self, **kwargs):
-                self.models = _StubModels()
-
         st = Settings(auto_checkpoint=False)  # explicitly off
         prior_cwd = OC.CONFIG.cwd
         OC.CONFIG.cwd = base
         try:
-            with patch("open_code.genai.Client", _StubClient):
-                OC.run_loop(
-                    task="quiet", model="fake", api_key="x",
-                    max_iterations=2, store=store, session=s,
-                    verbose=False, stream=False,
-                    fire_session_start=False,
-                    settings=st, is_repl=False,
-                )
+            OC.run_loop(
+                task="quiet", model="fake", api_key="x",
+                max_iterations=2, store=store, session=s,
+                verbose=False, stream=False,
+                fire_session_start=False,
+                settings=st, is_repl=False,
+                llm=OkFakeClient(text="ok"),
+            )
         finally:
             OC.CONFIG.cwd = prior_cwd
 

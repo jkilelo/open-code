@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 
 import open_code as OC
 import sessions as SX
+from llm import Message, Part
 
 
 # ===========================================================================
@@ -23,36 +24,28 @@ with tempfile.TemporaryDirectory() as d:
     store = SX.SessionStore(Path(d).resolve())
     s = store.create("/tmp/x", "fake", "test compact")
     # Simulate 10 prior msgs + a compact event + 3 recent msgs
-    from google.genai import types as _t
     for i in range(10):
-        msg = _t.Content(role="user" if i % 2 == 0 else "model",
-                         parts=[_t.Part.from_text(text=f"old msg {i}")])
+        msg = Message(role="user" if i % 2 == 0 else "model",
+                      parts=[Part.make_text(f"old msg {i}")])
         store.append_message(s, msg)
     store.append_compact(s, summary="Files: a.py, b.py. Decided: use pathlib.",
                          kept_recent=3, dropped=7, model="fake-summarizer")
     for i in range(3):
-        msg = _t.Content(role="user" if i % 2 == 0 else "model",
-                         parts=[_t.Part.from_text(text=f"recent {i}")])
+        msg = Message(role="user" if i % 2 == 0 else "model",
+                      parts=[Part.make_text(f"recent {i}")])
         store.append_message(s, msg)
     hist, dropped = store.load_history(s, max_messages=0)
     # 10 dropped + 3 recent + 1 summary synthetic = 4 messages now
     assert len(hist) <= 14, f"expected compacted history; got {len(hist)} msgs"
     # First message should be the synthetic summary
-    first_text = "".join(
-        getattr(p, "text", "") or "" for p in (hist[0].parts or [])
-    )
+    first_text = hist[0].text()
     assert "compacted earlier history" in first_text.lower() or "summary" in first_text.lower()
     assert "use pathlib" in first_text
     # Last messages should be the recent ones
-    last_text = "".join(
-        getattr(p, "text", "") or "" for p in (hist[-1].parts or [])
-    )
+    last_text = hist[-1].text()
     assert "recent" in last_text
     # The 7 oldest msgs should be GONE
-    all_concat = " ".join(
-        "".join(getattr(p, "text", "") or "" for p in (m.parts or []))
-        for m in hist
-    )
+    all_concat = " ".join(m.text() for m in hist)
     assert "old msg 0" not in all_concat
     assert "old msg 6" not in all_concat
 print("[PASS] compact event replaces prior msgs with synthetic summary")
@@ -62,10 +55,9 @@ print("[PASS] compact event replaces prior msgs with synthetic summary")
 with tempfile.TemporaryDirectory() as d:
     store = SX.SessionStore(Path(d).resolve())
     s = store.create("/tmp/x", "fake", "no compact")
-    from google.genai import types as _t
     for i in range(5):
-        msg = _t.Content(role="user" if i % 2 == 0 else "model",
-                         parts=[_t.Part.from_text(text=f"plain {i}")])
+        msg = Message(role="user" if i % 2 == 0 else "model",
+                      parts=[Part.make_text(f"plain {i}")])
         store.append_message(s, msg)
     hist, _ = store.load_history(s, max_messages=0)
     assert len(hist) == 5

@@ -23,11 +23,11 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import sessions as SX
-from google.genai import types as _t
+from llm import Message, Part
 
 
-def _new_msg(role: str, text: str) -> _t.Content:
-    return _t.Content(role=role, parts=[_t.Part.from_text(text=text)])
+def _new_msg(role: str, text: str) -> Message:
+    return Message(role=role, parts=[Part.make_text(text)])
 
 
 # ===========================================================================

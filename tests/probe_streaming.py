@@ -3,6 +3,10 @@
 We monkeypatch sys.stdout.write to log timestamps for every write, then
 run a long-output task and check that the writes come in distinct events
 spaced over time (not one big flush at end).
+
+After LLM decoupling, the probe goes through the neutral LLMClient
+factory -- which means it now also exercises that Gemini's adapter
+honors the streaming contract end-to-end.
 """
 from __future__ import annotations
 import os, sys, time
@@ -18,6 +22,7 @@ except ImportError:
     pass
 
 import open_code
+from llm import Message, Part, make_llm_client
 
 # Buffer of (timestamp_since_start, n_chars)
 events: list[tuple[float, int]] = []
@@ -40,19 +45,16 @@ api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 if not api_key:
     print("NO API KEY", file=sys.stderr); sys.exit(0)
 
-from google import genai
-from google.genai import types
-
-client = genai.Client(api_key=api_key)
-cfg = types.GenerateContentConfig(system_instruction="You are a helpful assistant.")
-history = [types.Content(role="user", parts=[types.Part.from_text(
-    text="Write a 400-word explanation of how TCP/IP works, in simple terms. Just prose, no code."
+llm = make_llm_client(provider="gemini", api_key=api_key)
+history = [Message(role="user", parts=[Part.make_text(
+    "Write a 400-word explanation of how TCP/IP works, in simple terms. Just prose, no code."
 )])]
 
 T0 = time.perf_counter()
-all_parts, fcs, usage = open_code._stream_iter_response(
-    client, model="gemini-3.1-flash-lite-preview",
-    history=history, config=cfg, verbose=False,
+all_parts, usage = open_code._stream_iter_response(
+    llm, model="gemini-3.1-flash-lite-preview",
+    history=history, system_instruction="You are a helpful assistant.",
+    tools=None, thinking_budget=None, verbose=False,
 )
 
 sys.stdout.write = orig_write  # restore

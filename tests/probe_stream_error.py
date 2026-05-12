@@ -2,6 +2,10 @@
 
 With v0.3's append-only JSONL + per-event flush, partial output before
 the error should be on disk. This was a v0.2 carried gap.
+
+Provider-agnostic: injects a fake LLMClient instead of mocking
+google.genai. The neutral protocol means we only need to fake
+ask_stream() yielding StreamChunks; the loop is unchanged.
 """
 from __future__ import annotations
 import sys, tempfile, json
@@ -11,28 +15,25 @@ sys.path.insert(0, str(ROOT))
 
 import open_code as oc
 from sessions import SessionStore
-from google.genai import types
-from unittest.mock import MagicMock
+from llm import Part, StreamChunk, Usage
 
-def _mk_chunk(text):
-    p = types.Part.from_text(text=text)
-    cand = MagicMock()
-    cand.content = types.Content(role="model", parts=[p])
-    chunk = MagicMock()
-    chunk.candidates = [cand]
-    chunk.usage_metadata = None
-    return chunk
 
-def fake_stream():
-    yield _mk_chunk("hello ")
-    yield _mk_chunk("world ")
-    raise ConnectionError("simulated network drop mid-stream")
+class FakeStreamErrorClient:
+    """LLMClient that streams two chunks then raises. Used to probe
+    the partial-write-then-error path in the agent loop."""
+    provider = "fake"
 
-fake_client = MagicMock()
-fake_client.models.generate_content_stream = lambda **kw: fake_stream()
+    def ask(self, **kw):  # not used in this probe
+        raise NotImplementedError
 
-orig = oc.genai.Client
-oc.genai.Client = lambda **kw: fake_client
+    def ask_stream(self, **kw):
+        yield StreamChunk(text_delta="hello ", tool_calls=[])
+        yield StreamChunk(text_delta="world ", tool_calls=[])
+        raise ConnectionError("simulated network drop mid-stream")
+
+    def embed(self, **kw):
+        return []
+
 
 store_root = Path(tempfile.mkdtemp(prefix="ocstream-"))
 store = SessionStore(store_root)
@@ -49,12 +50,11 @@ try:
         initial_history=[],
         verbose=False,
         stream=True,
+        llm=FakeStreamErrorClient(),
     )
     print(f"\nexit_code={code} metrics_iters={metrics['iterations']}")
 except Exception as e:
     print(f"loop raised: {type(e).__name__}: {e}")
-finally:
-    oc.genai.Client = orig
 
 # Inspect what's actually on disk
 print(f"\nEvents written to JSONL ({session.path.name}):")

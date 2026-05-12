@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from google.genai import types
+from llm import Message, Part
 
 JSONL_VERSION = "0.3.0"
 
@@ -61,50 +61,146 @@ def encode_cwd(cwd: str | Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def content_to_dict(content: types.Content) -> dict[str, Any]:
-    """Serialize a types.Content to a JSON-friendly dict.
+def _encode_extra(extra: dict[str, Any]) -> dict[str, Any]:
+    """JSON-safe encode of Part.extra. bytes -> {"__b64": "..."}.
+    Used for provider-specific opaque metadata (e.g. Gemini's
+    `thought_signature`) so resume preserves it across restarts."""
+    if not extra:
+        return {}
+    import base64
+    out: dict[str, Any] = {}
+    for k, v in extra.items():
+        if isinstance(v, (bytes, bytearray)):
+            out[k] = {"__b64": base64.b64encode(bytes(v)).decode("ascii")}
+        else:
+            out[k] = v
+    return out
 
-    Each Part becomes one of: text / function_call / function_response.
-    The format is stable across SDK versions because we only store the
-    data fields, not the SDK's internal object identity.
+
+def _decode_extra(extra: dict[str, Any]) -> dict[str, Any]:
+    if not extra:
+        return {}
+    import base64
+    out: dict[str, Any] = {}
+    for k, v in extra.items():
+        if isinstance(v, dict) and "__b64" in v:
+            try:
+                out[k] = base64.b64decode(v["__b64"])
+            except Exception:
+                out[k] = v  # bad encoding -- keep wrapper rather than crash
+        else:
+            out[k] = v
+    return out
+
+
+def content_to_dict(content: Message) -> dict[str, Any]:
+    """Serialize a neutral Message to a JSON-friendly dict.
+
+    On-disk part shapes:
+      - text:              {"type": "text", "text": "..."}
+      - function_call:     {"type": "function_call", "name": "...",
+                            "args": {...}, "call_id": "...", "extra": {...}}
+      - function_response: {"type": "function_response", "name": "...",
+                            "response": {...}, "call_id": "...",
+                            "is_error": bool, "extra": {...}}
+      - thinking:          {"type": "thinking", "text": "...", "extra": {...}}
+      - image:             {"type": "image", "mime": "...",
+                            "data_b64": "...", "url": "...", "file_id": "..."}
+
+    Old JSONL files (which only had text/function_call/function_response
+    without call_id/is_error) load fine via dict_to_content -- the new
+    fields default to empty.
     """
     parts_out: list[dict[str, Any]] = []
-    for p in content.parts or []:
-        text = getattr(p, "text", None)
-        fc = getattr(p, "function_call", None)
-        fr = getattr(p, "function_response", None)
-        if fc is not None and getattr(fc, "name", None):
-            args_d = dict(fc.args) if fc.args else {}
-            parts_out.append({"type": "function_call", "name": fc.name, "args": args_d})
-        elif fr is not None and getattr(fr, "name", None):
-            resp_d = dict(fr.response) if fr.response else {}
-            parts_out.append({"type": "function_response", "name": fr.name, "response": resp_d})
-        elif text:
-            parts_out.append({"type": "text", "text": text})
+    for p in content.parts:
+        if p.is_tool_call():
+            entry: dict[str, Any] = {
+                "type": "function_call",
+                "name": p.tool_name,
+                "args": dict(p.tool_args) if p.tool_args else {},
+            }
+            if p.tool_call_id:
+                entry["call_id"] = p.tool_call_id
+            if p.extra:
+                entry["extra"] = _encode_extra(p.extra)
+            parts_out.append(entry)
+        elif p.is_tool_result():
+            entry = {
+                "type": "function_response",
+                "name": p.tool_name,
+                "response": dict(p.tool_result) if p.tool_result else {},
+            }
+            if p.tool_call_id:
+                entry["call_id"] = p.tool_call_id
+            if p.is_error:
+                entry["is_error"] = True
+            if p.extra:
+                entry["extra"] = _encode_extra(p.extra)
+            parts_out.append(entry)
+        elif p.is_thinking():
+            entry = {"type": "thinking", "text": p.text}
+            if p.extra:
+                entry["extra"] = _encode_extra(p.extra)
+            parts_out.append(entry)
+        elif p.is_image():
+            entry = {"type": "image", "mime": p.image_mime}
+            if p.image_data:
+                import base64
+                entry["data_b64"] = base64.b64encode(p.image_data).decode("ascii")
+            if p.image_url:
+                entry["url"] = p.image_url
+            if p.image_file_id:
+                entry["file_id"] = p.image_file_id
+            parts_out.append(entry)
+        elif p.is_text() and p.text:
+            parts_out.append({"type": "text", "text": p.text})
     return {"role": content.role or "", "parts": parts_out}
 
 
-def dict_to_content(d: dict[str, Any]) -> types.Content:
-    parts: list[types.Part] = []
+def dict_to_content(d: dict[str, Any]) -> Message:
+    """Inverse of content_to_dict. Returns a neutral Message.
+
+    Tolerates old JSONL (pre-v0.30) shapes: function_call/function_response
+    without call_id/is_error round-trip to empty-string/False defaults.
+    """
+    parts: list[Part] = []
     for pd in d.get("parts", []):
         t = pd.get("type")
         if t == "text":
-            parts.append(types.Part.from_text(text=pd.get("text", "")))
+            parts.append(Part.make_text(pd.get("text", "")))
         elif t == "function_call":
-            parts.append(
-                types.Part(
-                    function_call=types.FunctionCall(
-                        name=pd["name"], args=pd.get("args", {})
-                    )
-                )
-            )
+            parts.append(Part.make_tool_call(
+                pd.get("name", ""), pd.get("args", {}) or {},
+                tool_call_id=pd.get("call_id", "") or "",
+                extra=_decode_extra(pd.get("extra", {}) or {}),
+            ))
         elif t == "function_response":
-            parts.append(
-                types.Part.from_function_response(
-                    name=pd["name"], response=pd.get("response", {})
-                )
-            )
-    return types.Content(role=d.get("role") or "user", parts=parts)
+            parts.append(Part.make_tool_result(
+                pd.get("name", ""), pd.get("response", {}) or {},
+                tool_call_id=pd.get("call_id", "") or "",
+                is_error=bool(pd.get("is_error", False)),
+                extra=_decode_extra(pd.get("extra", {}) or {}),
+            ))
+        elif t == "thinking":
+            parts.append(Part.make_thinking(
+                pd.get("text", ""),
+                extra=_decode_extra(pd.get("extra", {}) or {}),
+            ))
+        elif t == "image":
+            import base64
+            data = None
+            if pd.get("data_b64"):
+                try:
+                    data = base64.b64decode(pd["data_b64"])
+                except Exception:
+                    data = None
+            parts.append(Part.make_image(
+                mime=pd.get("mime", ""),
+                data=data,
+                url=pd.get("url", "") or "",
+                file_id=pd.get("file_id", "") or "",
+            ))
+    return Message(role=d.get("role") or "user", parts=parts)
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +314,7 @@ class SessionStore:
             f.write(json.dumps(event) + "\n")
             f.flush()
 
-    def append_message(self, session: Session, content: types.Content) -> None:
+    def append_message(self, session: Session, content: Message) -> None:
         # seq lets us reconstruct ordering without trusting file position.
         # H4 fix: in-memory counter avoids the O(N) scan per turn that
         # accumulated to O(N^2) over a long /loop or REPL session.
@@ -484,7 +580,7 @@ class SessionStore:
 
     def load_history(
         self, session: Session, max_messages: int = 80
-    ) -> tuple[list[types.Content], int]:
+    ) -> tuple[list[Message], int]:
         """Read the JSONL file, return (history, dropped_count).
 
         max_messages <= 0 means uncapped. The returned history is
@@ -495,7 +591,7 @@ class SessionStore:
         user-role summary message. Subsequent `msg` events (those
         AFTER the compact) load verbatim.
         """
-        all_msgs: list[types.Content] = []
+        all_msgs: list[Message] = []
         msg_count_at_compact = 0  # how many msgs preceded the latest compact
         compact_summary: str | None = None
         try:

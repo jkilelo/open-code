@@ -1,11 +1,11 @@
 """Probe: resume loads ALL prior messages with no cap. Token bloat?"""
 from __future__ import annotations
-import sys, tempfile, json
+import sys, tempfile
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from sessions import SessionStore
-from google.genai import types
+from llm import Message, Part
 
 store_root = Path(tempfile.mkdtemp(prefix="ocbloat-"))
 store = SessionStore(store_root)
@@ -13,17 +13,17 @@ session = store.create("/foo/cwd", "gemini-x", "first task")
 
 # Simulate 200 turns of accumulated history with realistic-size content
 for i in range(200):
-    user = types.Content(role="user", parts=[types.Part.from_text(text=f"user turn {i}: " + "x"*500)])
+    user = Message(role="user", parts=[Part.make_text(f"user turn {i}: " + "x"*500)])
     store.append_message(session, user)
-    model = types.Content(role="model", parts=[types.Part.from_text(text=f"model reply {i}: " + "y"*1500)])
+    model = Message(role="model", parts=[Part.make_text(f"model reply {i}: " + "y"*1500)])
     store.append_message(session, model)
 
 def _chars(hist):
     total = 0
     for m in hist:
-        for p in m.parts or []:
-            t = getattr(p, "text", None) or ""
-            total += len(t)
+        for p in m.parts:
+            if p.is_text():
+                total += len(p.text)
     return total
 
 # 1) Uncapped (max_messages=0)

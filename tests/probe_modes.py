@@ -1,4 +1,9 @@
-"""Probe: permission modes (plan / acceptEdits / bypassPermissions)."""
+"""Probe: permission modes (plan / acceptEdits / bypassPermissions).
+
+After the LLM decoupling, this probe injects a fake LLMClient instead
+of monkey-patching genai.Client. The streaming contract is the
+LLMClient protocol; the loop is fully provider-agnostic.
+"""
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -46,37 +51,36 @@ with tempfile.TemporaryDirectory() as d:
 print("[PASS] invalid mode -> default fallback")
 
 
-# ---- Test 5: Now exercise the run_loop mode-gating logic via a mock ----
-# Import run_loop's mode logic by importing what we need
+# ---- Test 5+: run_loop mode-gating via a fake LLMClient ----
 from open_code import run_loop, SYSTEM_INSTRUCTION
 from sessions import SessionStore
 from tools import CONFIG
-from unittest.mock import MagicMock
-from google.genai import types
+from llm import Part, StreamChunk
 
-# Build a fake client that always asks to call write_file once then stops
-class _FakeStream:
-    def __init__(self, parts):
-        self._parts = parts
-    def __iter__(self):
-        chunk = MagicMock()
-        cand = MagicMock()
-        cand.content = types.Content(role="model", parts=self._parts)
-        chunk.candidates = [cand]
-        chunk.usage_metadata = None
-        yield chunk
 
-def _fake_client_factory(*, parts):
-    client = MagicMock()
-    def stream(**kw):
-        return _FakeStream(parts)
-    client.models.generate_content_stream = stream
-    return client
+class CyclingFakeClient:
+    """First call streams a tool_call Part; subsequent calls stream a
+    text 'done' part. Exercises the iter-1-tool, iter-2-stop flow that
+    every mode probe needs."""
+    provider = "fake"
 
-def _patch_client(parts):
-    import open_code
-    client = _fake_client_factory(parts=parts)
-    open_code.genai.Client = lambda **kw: client
+    def __init__(self, tool_call: Part, done_text: str):
+        self._tool = tool_call
+        self._done = done_text
+        self._n = 0
+
+    def ask(self, **kw):
+        raise NotImplementedError
+
+    def ask_stream(self, **kw):
+        self._n += 1
+        if self._n == 1:
+            yield StreamChunk(text_delta="", tool_calls=[self._tool])
+        else:
+            yield StreamChunk(text_delta=self._done, tool_calls=[])
+
+    def embed(self, **kw):
+        return []
 
 
 # Plan mode: write_file call is denied
@@ -87,26 +91,10 @@ with tempfile.TemporaryDirectory() as d:
     store = SessionStore(store_root)
     session = store.create(str(base), "fake", "test plan mode")
 
-    # First model turn: try to write a file
-    write_part = types.Part(
-        function_call=types.FunctionCall(
-            name="write_file", args={"path": "x.txt", "content": "hi"}
-        )
+    fake_llm = CyclingFakeClient(
+        tool_call=Part.make_tool_call("write_file", {"path": "x.txt", "content": "hi"}),
+        done_text="(plan-mode iter)",
     )
-    text_done = types.Part.from_text(text="(plan-mode iter)")
-
-    # Cycle: first iter wants write_file; second iter no tools (model "concludes")
-    call_count = {"n": 0}
-    import open_code
-    class _CyclingClient:
-        class models:
-            @staticmethod
-            def generate_content_stream(**kw):
-                call_count["n"] += 1
-                if call_count["n"] == 1:
-                    return _FakeStream([write_part])
-                return _FakeStream([text_done])
-    open_code.genai.Client = lambda **kw: _CyclingClient()
 
     s_plan = S.Settings(mode="plan")
     code, metrics = run_loop(
@@ -116,6 +104,7 @@ with tempfile.TemporaryDirectory() as d:
         initial_history=[], verbose=False, stream=True,
         system_instruction=SYSTEM_INSTRUCTION, settings=s_plan,
         is_repl=False, fire_session_start=False,
+        llm=fake_llm,
     )
     assert metrics["tool_errors"] >= 1, f"plan mode should deny write_file; metrics={metrics}"
     assert not (base / "x.txt").exists(), "plan mode should NOT have written the file"
@@ -130,23 +119,10 @@ with tempfile.TemporaryDirectory() as d:
     store = SessionStore(base / "sessroot")
     session = store.create(str(base), "fake", "test bypass")
 
-    write_part = types.Part(
-        function_call=types.FunctionCall(
-            name="write_file", args={"path": "y.txt", "content": "hi"}
-        )
+    fake_llm = CyclingFakeClient(
+        tool_call=Part.make_tool_call("write_file", {"path": "y.txt", "content": "hi"}),
+        done_text="(bypass-mode iter)",
     )
-    text_done = types.Part.from_text(text="(bypass-mode iter)")
-    call_count = {"n": 0}
-    import open_code
-    class _CyclingClient2:
-        class models:
-            @staticmethod
-            def generate_content_stream(**kw):
-                call_count["n"] += 1
-                if call_count["n"] == 1:
-                    return _FakeStream([write_part])
-                return _FakeStream([text_done])
-    open_code.genai.Client = lambda **kw: _CyclingClient2()
 
     s_bypass = S.Settings(
         mode="bypassPermissions",
@@ -159,6 +135,7 @@ with tempfile.TemporaryDirectory() as d:
         initial_history=[], verbose=False, stream=True,
         system_instruction=SYSTEM_INSTRUCTION, settings=s_bypass,
         is_repl=False, fire_session_start=False,
+        llm=fake_llm,
     )
     assert metrics["tool_errors"] == 0, f"bypass should allow; metrics={metrics}"
     assert (base / "y.txt").exists(), "bypass mode should allow write"
@@ -173,23 +150,10 @@ with tempfile.TemporaryDirectory() as d:
     store = SessionStore(base / "sessroot")
     session = store.create(str(base), "fake", "test acceptEdits")
 
-    write_part = types.Part(
-        function_call=types.FunctionCall(
-            name="write_file", args={"path": "z.txt", "content": "hi"}
-        )
+    fake_llm = CyclingFakeClient(
+        tool_call=Part.make_tool_call("write_file", {"path": "z.txt", "content": "hi"}),
+        done_text="(acceptEdits iter)",
     )
-    text_done = types.Part.from_text(text="(acceptEdits iter)")
-    call_count = {"n": 0}
-    import open_code
-    class _CyclingClient3:
-        class models:
-            @staticmethod
-            def generate_content_stream(**kw):
-                call_count["n"] += 1
-                if call_count["n"] == 1:
-                    return _FakeStream([write_part])
-                return _FakeStream([text_done])
-    open_code.genai.Client = lambda **kw: _CyclingClient3()
 
     s_accept = S.Settings(
         mode="acceptEdits",
@@ -202,6 +166,7 @@ with tempfile.TemporaryDirectory() as d:
         initial_history=[], verbose=False, stream=True,
         system_instruction=SYSTEM_INSTRUCTION, settings=s_accept,
         is_repl=False, fire_session_start=False,
+        llm=fake_llm,
     )
     assert metrics["tool_errors"] == 0, f"acceptEdits should allow; metrics={metrics}"
     assert (base / "z.txt").exists(), "acceptEdits should write"
