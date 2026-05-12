@@ -370,7 +370,7 @@ class MCPClient:
                     continue
                 description = tool.get("description") or ""
                 input_schema = tool.get("inputSchema") or {
-                    "type": "OBJECT", "properties": {}
+                    "type": "object", "properties": {}
                 }
                 # Translate JSON Schema type names to Gemini's case.
                 params = _normalize_schema(input_schema)
@@ -403,31 +403,29 @@ class MCPClient:
 
 
 def _normalize_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """Translate JSON Schema type names to Gemini's TOOL parameters shape.
+    """Ensure a tool input schema is standard JSON Schema (lowercase types).
 
-    Gemini accepts JSON-Schema-like dicts but expects type names in UPPER
-    CASE (OBJECT/STRING/INTEGER/BOOLEAN/NUMBER/ARRAY). We rewrite
-    recursively so nested properties also work.
+    Pre-v0.30 this function uppercased types for Gemini. Now that
+    open-code is provider-agnostic and Gemini's SDK accepts standard
+    JSON Schema, we keep types lowercase so Anthropic + OpenAI can
+    consume the same declarations unchanged. The Gemini adapter does
+    not require uppercase; either form works.
     """
     if not isinstance(schema, dict):
-        return {"type": "OBJECT", "properties": {}}
+        return {"type": "object", "properties": {}}
     out: dict[str, Any] = {}
-    type_map = {
-        "object": "OBJECT", "string": "STRING", "integer": "INTEGER",
-        "number": "NUMBER", "boolean": "BOOLEAN", "array": "ARRAY",
-    }
     for k, v in schema.items():
         if k == "type" and isinstance(v, str):
-            out[k] = type_map.get(v.lower(), v.upper())
+            out[k] = v.lower()
         elif k == "properties" and isinstance(v, dict):
             out[k] = {pk: _normalize_schema(pv) for pk, pv in v.items()}
         elif k == "items" and isinstance(v, dict):
             out[k] = _normalize_schema(v)
         else:
             out[k] = v
-    # Ensure top-level has at least an OBJECT type
+    # Anthropic + OpenAI require top-level type=object on tool input_schema
     if "type" not in out:
-        out["type"] = "OBJECT"
-    if out.get("type") == "OBJECT" and "properties" not in out:
+        out["type"] = "object"
+    if out.get("type") == "object" and "properties" not in out:
         out["properties"] = {}
     return out

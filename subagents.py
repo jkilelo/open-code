@@ -250,14 +250,14 @@ DELEGATE_TOOL_DECLARATION = {
         "want to keep your own context clean."
     ),
     "parameters": {
-        "type": "OBJECT",
+        "type": "object",
         "properties": {
             "agent": {
-                "type": "STRING",
+                "type": "string",
                 "description": "Subagent name (see /agents for the list).",
             },
             "task": {
-                "type": "STRING",
+                "type": "string",
                 "description": "What the subagent should investigate or produce.",
             },
         },

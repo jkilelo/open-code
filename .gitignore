@@ -25,3 +25,6 @@ Thumbs.db
 
 # Local-only verification scratch
 verify-wsl.sh
+
+# Per-project personal settings (provider, model, sticky permissions)
+.open-code/settings.local.json

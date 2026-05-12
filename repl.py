@@ -24,7 +24,7 @@ from sessions import Session, SessionStore
 
 
 REPL_BANNER = """\
-open-code -- Gemini coding agent (REPL mode)
+open-code -- LLM-agnostic coding agent (REPL mode)
 Session {sid} in {cwd}
 Type your task, /help for commands, /exit (or Ctrl+D) to leave.
 """

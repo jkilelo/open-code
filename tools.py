@@ -288,8 +288,8 @@ TOOL_DECLARATIONS = [
         "name": "read_file",
         "description": "Read a UTF-8 text file and return its contents.",
         "parameters": {
-            "type": "OBJECT",
-            "properties": {"path": {"type": "STRING", "description": "Path to the file."}},
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Path to the file."}},
             "required": ["path"],
         },
     },
@@ -301,10 +301,10 @@ TOOL_DECLARATIONS = [
             "directory unless the user invoked open-code with --allow-outside-cwd."
         ),
         "parameters": {
-            "type": "OBJECT",
+            "type": "object",
             "properties": {
-                "path": {"type": "STRING", "description": "Path to write."},
-                "content": {"type": "STRING", "description": "File content."},
+                "path": {"type": "string", "description": "Path to write."},
+                "content": {"type": "string", "description": "File content."},
             },
             "required": ["path", "content"],
         },
@@ -313,9 +313,9 @@ TOOL_DECLARATIONS = [
         "name": "list_dir",
         "description": "List the entries in a directory (non-recursive).",
         "parameters": {
-            "type": "OBJECT",
+            "type": "object",
             "properties": {
-                "path": {"type": "STRING", "description": "Directory path. Defaults to '.'."}
+                "path": {"type": "string", "description": "Directory path. Defaults to '.'."}
             },
         },
     },
@@ -328,11 +328,11 @@ TOOL_DECLARATIONS = [
             "user invoked open-code with --allow-dangerous."
         ),
         "parameters": {
-            "type": "OBJECT",
+            "type": "object",
             "properties": {
-                "command": {"type": "STRING", "description": "Shell command."},
+                "command": {"type": "string", "description": "Shell command."},
                 "timeout": {
-                    "type": "INTEGER",
+                    "type": "integer",
                     "description": f"Seconds before kill. Default {DEFAULT_TIMEOUT_PER_SHELL}.",
                 },
             },
@@ -369,10 +369,10 @@ APPLY_PATCH_TOOL_DECLARATION = {
         "fails clean. Honors --allow-outside-cwd."
     ),
     "parameters": {
-        "type": "OBJECT",
+        "type": "object",
         "properties": {
             "patch": {
-                "type": "STRING",
+                "type": "string",
                 "description": "The full V4A envelope, beginning with "
                                "'*** Begin Patch' and ending with "
                                "'*** End Patch'.",

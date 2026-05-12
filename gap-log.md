@@ -621,6 +621,54 @@ Verified: `python open_code.py --list-styles` now emits clean output with no std
 
 **v0.28.0 ships [OK].** 48/48 probes. ASCII pure. Security 54/54.
 
+---
+
+## v0.29.0 -- 2026-05-12 (LLM-agnostic neutral protocol)
+
+User: "how can we decouple llm from the open-code to make it llm-agnostic so that i can swap llm or model any time i want?" Chose big-bang refactor.
+
+Built `llm.py` neutral protocol (`Part`, `Message`, `ToolDecl`, `Usage`, `AskResult`, `StreamChunk`, `LLMClient` Protocol) + `llm_gemini.py` Gemini adapter. Factory lazy-imports adapters. `open_code.py`, `sessions.py`, `repl.py`, `cli.py` all migrated to neutral types. `_handle_request_specialist` / `_handle_find_specialist` / `_handle_delegate_call` thread the same `LLMClient` instance through nested run_loop calls.
+
+Live tool-call run hit Gemini 3's INVALID_ARGUMENT on missing `thought_signature` -> added `Part.extra: dict[str, Any]` as opaque provider stash; adapter captures sig on the way in, restores on the way out. Sessions storage base64-encodes byte values so `--resume` carries signatures across restarts.
+
+**v0.29.0 ships [OK].** 49/49 probes (new `probe_llm.py`). ASCII pure. Live Gemini one-shot + tool-call + resume verified.
+
+---
+
+## v0.30.0 -- 2026-05-12 (3-provider package with shared base)
+
+Three parallel research agents fetched latest SDK docs (google-genai 2.1.0, anthropic 0.101.0, openai 2.36.0). Synthesized into `runs/2026-05-12-llm-design.md` -- a 3-provider parameter matrix and design choices.
+
+Replaced flat `llm.py` + `llm_gemini.py` with `llm/` package:
+
+- `types.py` -- 5 Part kinds (added thinking + image), `tool_call_id`, `is_error` auto-detected from `{"ok": False}`
+- `errors.py` -- 12-class neutral exception tree
+- `base.py` -- `BaseLLMClient` ABC + `StreamAccumulator` (shared streaming-assembly, error translation, stop-reason normalization)
+- `_gemini.py`, `_anthropic.py`, `_openai.py` (Responses API), `_openai_chat.py` (legacy / OSS-compat)
+- `protocol.py`, `factory.py`, `__init__.py`
+
+22-kwarg first-class `LLMClient.ask` surface covering everything common; `extra={}` escape hatch for per-provider knobs.
+
+**v0.30.0 ships [OK].** 49/49 probes. ASCII pure. Live Gemini one-shot + streaming + tool-chain + resume + structured output + embeddings verified. Anthropic + OpenAI adapters compile + lazy-import OK but flagged as unverified-on-wire.
+
+---
+
+## v0.30.1 -- 2026-05-12 (wire-verify Anthropic + OpenAI; fix 2 bugs)
+
+Live-tested both unverified adapters with real keys. 6 tests each:
+
+- **Anthropic** (claude-haiku-4-5): non-streaming, streaming, multi-iter tool chain w/ `tool_use_id` round-trip, `embed()` raises `LLMConfigError`, extended thinking, structured output.
+- **OpenAI** (gpt-5-mini, text-embedding-3-small): non-streaming, streaming, multi-iter tools w/ `call_id` round-trip, `text.format.json_schema` strict mode, embeddings + dim truncation, `reasoning_effort` knob.
+
+Two adapter bugs caught + fixed:
+
+- `_ADAPTIVE_THINKING_MODELS` was too wide; Haiku 4.5 rejects adaptive ("400 - adaptive thinking is not supported on this model"). Narrowed to Opus 4.7 / Opus 4.6 / Sonnet 4.6 only.
+- `DEFAULT_MODELS["openai"]` was `gpt-5.5-mini` -- not GA on standard tier. `client.models.list()` showed `gpt-5-mini` available. Defaulted to that.
+
+Bonus: OpenAI account hit `insufficient_quota` (429) before quota was added. Adapter's `_translate_error` mapped it cleanly to `LLMRateLimitError`. One real path through the error pipeline verified without a synthetic test.
+
+**v0.30.1 ships [OK].** 49/49 probes. ASCII pure. All three providers wire-verified across 18 live tests. README + LEARN.md updated for provider-agnostic intro + provider table.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)
@@ -693,7 +741,7 @@ not corruption / hang / correctness bugs:
 ## Carried gaps (still [ ])
 
 - [ ] Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save)
-- [ ] Multi-LLM support (Mara persona trigger)
+- [OK] Multi-LLM support (Mara persona trigger) -- shipped v0.30.x (Gemini / Anthropic / OpenAI; 3 wire-verified adapters)
 - [ ] Tool allowlist mode + `--ask` interactive permission prompts
 - [ ] Hooks (PreToolUse / PostToolUse / Stop / SessionStart) -- kit uses these; bigger lift
 - [ ] MCP server protocol
@@ -708,7 +756,7 @@ Pre-commitment for v0.5: open_code.py is at 970 -- one new flag could push it ov
 - [ ] Partial *model* stream text doesn't survive mid-stream errors (would need per-chunk save with rebuild logic on resume)
 - [ ] Glyph rendering by terminal code page (cosmetic)
 - [ ] Pyright `reportUnknownMemberType` warnings (cosmetic)
-- [ ] Multi-LLM support (Mara persona trigger)
+- [OK] Multi-LLM support (Mara persona trigger) -- shipped v0.30.x (Gemini / Anthropic / OpenAI; 3 wire-verified adapters)
 - [ ] Tool allowlist mode + `--ask` interactive permission prompts
 - [ ] `--prune-sessions` (now Jeff can `rm ~/.open-code/projects/<cwd>/<uuid>.jsonl` directly)
 
@@ -730,7 +778,7 @@ the user's v0.2.1 scope:
 
 From earlier carried list:
 
-- [ ] Multi-LLM support (Mara persona trigger)
+- [OK] Multi-LLM support (Mara persona trigger) -- shipped v0.30.x (Gemini / Anthropic / OpenAI; 3 wire-verified adapters)
 - [ ] Tool allowlist mode + `--ask` interactive permission prompts
 - [ ] Audit log of denylist hits / path-sandbox refusals
 - [ ] `--prune-sessions` to clean old SQLite history

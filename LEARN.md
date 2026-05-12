@@ -8,15 +8,29 @@ You need:
 
 - Python 3.13 (`py -3.13` on Windows; `python3.13` on POSIX)
 - `pip install -r requirements.txt` from a fresh clone
-- A Gemini API key at `https://aistudio.google.com/app/apikey` --
-  put it in a `.env` file in your project directory:
+- One LLM provider's SDK + API key. open-code is provider-agnostic
+  (Gemini / Anthropic / OpenAI). This tutorial uses Gemini for the
+  examples because it has a generous free tier:
 
 ```
-GEMINI_API_KEY=your-key-here
+# Gemini (default; this tutorial)
+pip install google-genai
+echo "GEMINI_API_KEY=your-key-here" >> .env   # https://aistudio.google.com/app/apikey
+
+# OR Anthropic (Claude)
+pip install anthropic
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env   # https://console.anthropic.com/
+
+# OR OpenAI (GPT)
+pip install openai
+echo "OPENAI_API_KEY=sk-proj-..." >> .env     # https://platform.openai.com/api-keys
 ```
 
 open-code auto-loads `.env` via python-dotenv. No shell exports
-required.
+required. To switch providers, add an `llm` block to your project's
+`.open-code/settings.json` (see the [README](README.md#configuration)
+provider table) -- everything else in this tutorial works
+identically across providers.
 
 ---
 

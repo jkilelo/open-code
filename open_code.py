@@ -67,6 +67,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# Windows console redirects default to cp1252, which can't encode
+# emoji / many model-output chars. Reconfigure stdout/stderr to UTF-8
+# with errors='replace' so model text always emits cleanly. No-op on
+# POSIX (already UTF-8). Idempotent: if a wrapper has been swapped in
+# elsewhere it may not expose reconfigure -- just skip.
+for _stream_name in ("stdout", "stderr"):
+    _stream = getattr(sys, _stream_name, None)
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
 try:
     from dotenv import load_dotenv
 
@@ -641,10 +654,18 @@ def _make_llm_from_settings(settings: Any, api_key: str) -> LLMClient:
         {
           "llm": {
             "provider": "gemini",         // gemini | anthropic | openai | ollama
-            "model": "gemini-3.1-...",    // optional; falls back to provider default
-            "api_key_env": "GEMINI_API_KEY"  // optional
+            "model": "...",               // optional; falls back to provider default
+            "api_key_env": "...",         // optional; default depends on provider
+            "extra": {...}                // optional; provider-specific knobs
           }
         }
+
+    api_key resolution: only respect the caller's `api_key` arg (which
+    cli.py historically reads as GEMINI_API_KEY) when the configured
+    provider is gemini. For anthropic/openai, route through the factory's
+    env-var lookup so each provider's natural key env is used. This
+    prevents the v0.29.0 bug where the cli's Gemini key got passed as
+    `x-api-key` to Anthropic and got rejected with HTTP 401.
     """
     raw = getattr(settings, "raw", {}) or {}
     cfg = raw.get("llm") if isinstance(raw, dict) else None
@@ -652,12 +673,10 @@ def _make_llm_from_settings(settings: Any, api_key: str) -> LLMClient:
         cfg = {}
     provider = (cfg.get("provider") or "gemini").lower()
     api_key_env = cfg.get("api_key_env")
-    # If the caller passed api_key directly (legacy path from
-    # cli.main which reads GEMINI_API_KEY explicitly), prefer it.
-    # Otherwise let make_llm_client resolve via env.
+    factory_key = api_key if provider == "gemini" else None
     return make_llm_client(
         provider=provider,
-        api_key=(api_key or None),
+        api_key=(factory_key or None),
         api_key_env=api_key_env,
         extra=cfg.get("extra"),
     )
@@ -1336,6 +1355,11 @@ def run_loop(
                 for fc in function_calls:
                     name = fc.tool_name
                     args = dict(fc.tool_args) if fc.tool_args else {}
+                    # Anthropic + OpenAI require the tool_result to carry
+                    # the same id the model used in tool_use/function_call.
+                    # Gemini doesn't require it but tolerates it. Always
+                    # round-trip when present.
+                    call_id = fc.tool_call_id
                     metrics["tool_calls"] += 1
                     if verbose:
                         ui.tool_call(name, args)
@@ -1388,7 +1412,7 @@ def run_loop(
                                 args_snippet=_short(json.dumps(args), 200),
                             )
                         tool_result_parts.append(
-                            Part.make_tool_result(name, result)
+                            Part.make_tool_result(name, result, tool_call_id=call_id)
                         )
                         continue
                     if decision == "ask":
@@ -1406,7 +1430,7 @@ def run_loop(
                                     args_snippet=_short(json.dumps(args), 200),
                                 )
                             tool_result_parts.append(
-                                Part.make_tool_result(name, result)
+                                Part.make_tool_result(name, result, tool_call_id=call_id)
                             )
                             continue
                         # REPL: prompt user.
@@ -1477,7 +1501,7 @@ def run_loop(
                                     args_snippet=_short(json.dumps(args), 200),
                                 )
                             tool_result_parts.append(
-                                Part.make_tool_result(name, result)
+                                Part.make_tool_result(name, result, tool_call_id=call_id)
                             )
                             continue
                         # else fall through to hook + execution
@@ -1508,7 +1532,7 @@ def run_loop(
                                 args_snippet=_short(json.dumps(args), 200),
                             )
                         tool_result_parts.append(
-                            Part.make_tool_result(name, result)
+                            Part.make_tool_result(name, result, tool_call_id=call_id)
                         )
                         continue
                     if pre.modified_args:
@@ -1576,7 +1600,7 @@ def run_loop(
                     )
 
                     tool_result_parts.append(
-                        Part.make_tool_result(name, result)
+                        Part.make_tool_result(name, result, tool_call_id=call_id)
                     )
 
                 tool_content = Message(role="user", parts=tool_result_parts)

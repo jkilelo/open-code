@@ -25,12 +25,14 @@ schema_in = {
     "required": ["name"],
 }
 out = _normalize_schema(schema_in)
-assert out["type"] == "OBJECT"
-assert out["properties"]["name"]["type"] == "STRING"
-assert out["properties"]["age"]["type"] == "INTEGER"
-assert out["properties"]["tags"]["type"] == "ARRAY"
-assert out["properties"]["tags"]["items"]["type"] == "STRING"
-print("[PASS] _normalize_schema lowercases -> UPPERCASE recursively")
+# v0.30.2: standard JSON Schema lowercase (was UPPERCASE for Gemini).
+# Anthropic + OpenAI require lowercase; Gemini accepts both.
+assert out["type"] == "object"
+assert out["properties"]["name"]["type"] == "string"
+assert out["properties"]["age"]["type"] == "integer"
+assert out["properties"]["tags"]["type"] == "array"
+assert out["properties"]["tags"]["items"]["type"] == "string"
+print("[PASS] _normalize_schema preserves JSON Schema lowercase types")
 
 
 # ---- Test 2: call_tool rejects malformed names ----
@@ -126,8 +128,8 @@ with tempfile.TemporaryDirectory() as d:
         assert decls[0]["name"] == "mcp__mock__echo"
         assert "MCP server: mock" in decls[0]["description"]
         params = decls[0]["parameters"]
-        assert params["type"] == "OBJECT"
-        assert params["properties"]["text"]["type"] == "STRING"
+        assert params["type"] == "object"
+        assert params["properties"]["text"]["type"] == "string"
         print("[PASS] all_tool_declarations exposes mcp__mock__echo with normalized schema")
 
         # Call the tool

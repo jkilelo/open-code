@@ -478,7 +478,7 @@ class UI:
                 c = self._rich_console()
                 body = Text()
                 body.append("open-code", style="bold cyan")
-                body.append(" -- Gemini coding agent (REPL)\n")
+                body.append(" -- LLM-agnostic coding agent (REPL)\n")
                 body.append("Session ", style="dim")
                 body.append(session_id, style="yellow")
                 body.append(" in ", style="dim")
@@ -496,7 +496,7 @@ class UI:
             except Exception:
                 pass
         out = (
-            "open-code -- Gemini coding agent (REPL mode)\n"
+            "open-code -- LLM-agnostic coding agent (REPL mode)\n"
             f"Session {session_id} in {cwd}\n"
         )
         if model:

@@ -1,14 +1,24 @@
 # open-code
 
-An LLM-agnostic terminal coding agent. Like Claude Code, but with a
-Gemini backend by default, ~5800 lines of pure-Python source, and a
-deliberately small footprint.
+An LLM-agnostic terminal coding agent. Like Claude Code, with a
+pluggable backend (Gemini / Anthropic / OpenAI), ~6500 lines of
+pure-Python source, and a deliberately small footprint.
 
 ```
 pip install -r requirements.txt
-export GEMINI_API_KEY=...   # https://aistudio.google.com/app/apikey
+# Pick ONE provider (install only the SDK you'll use):
+pip install google-genai   &&  export GEMINI_API_KEY=...     # https://aistudio.google.com/app/apikey
+pip install anthropic      &&  export ANTHROPIC_API_KEY=...  # https://console.anthropic.com/
+pip install openai         &&  export OPENAI_API_KEY=...     # https://platform.openai.com/api-keys
 python open_code.py
 ```
+
+Gemini is the default. Switch providers via
+`.open-code/settings.json -> "llm": {"provider": "anthropic"}` (or
+`"openai"`). The factory lazy-imports adapters, so you only pay for
+the SDKs you actually use. See [`llm/`](llm/) for the full neutral
+protocol + per-provider translation; [`runs/2026-05-12-llm-design.md`](runs/2026-05-12-llm-design.md)
+documents the 3-provider research that shaped the interface.
 
 That drops you into a REPL with persistent history, autosuggest from
 your prior prompts, tab-complete on slash commands, and Rich-styled
@@ -149,11 +159,15 @@ Layered, read in this order (later wins):
 4. `/etc/open-code/managed.json` (POSIX) or
    `%PROGRAMDATA%\open-code\managed.json` (Windows) -- enterprise
 
-Example `.open-code/settings.json`:
+Example `.open-code/settings.json` (Gemini default; pick whichever
+`llm.provider` you want):
 
 ```json
 {
-  "model": "gemini-3.1-flash-lite-preview",
+  "llm": {
+    "provider": "gemini",
+    "model":    "gemini-3.1-flash-lite-preview"
+  },
   "max_iterations": 25,
   "permissions": {
     "allow": ["read_file", "list_dir"],
@@ -172,6 +186,23 @@ Example `.open-code/settings.json`:
   }
 }
 ```
+
+Switch providers by changing the `llm` block. Supported values:
+
+| Provider | `llm.provider` | Default model       | API key env var      |
+|----------|----------------|---------------------|----------------------|
+| Gemini   | `"gemini"`     | `gemini-3.1-flash-lite` | `GEMINI_API_KEY`     |
+| Anthropic| `"anthropic"`  | `claude-haiku-4-5`  | `ANTHROPIC_API_KEY`  |
+| OpenAI Responses (modern) | `"openai"` | `gpt-5-mini` | `OPENAI_API_KEY` |
+| OpenAI Chat Completions (legacy / OSS-compat) | `"openai_chat"` | `gpt-5-mini` | `OPENAI_API_KEY` |
+
+Override the env var name via `llm.api_key_env`. Pass provider-
+specific knobs (Gemini `safety_settings`, Anthropic `betas`, OpenAI
+`previous_response_id`, etc.) via `llm.extra`. The neutral protocol
++ per-Part `extra` dict round-trip provider-specific opaque state
+(Gemini's `thought_signature`, Anthropic's thinking `signature`,
+OpenAI's reasoning `encrypted_content`) through JSONL storage, so
+`--resume` works across providers without losing reasoning context.
 
 Permission rules: `Tool` (any args), `Tool(specifier)` (fnmatch on
 arg values), `Tool(/regex/)` (regex search). Evaluation order is
@@ -399,7 +430,7 @@ python tests/probe_ascii_only.py   # verify
 
 | | Claude Code | Aider | open-code |
 |---|---|---|---|
-| Backend | Anthropic only | many | Gemini default, model-agnostic shape |
+| Backend | Anthropic only | many | Gemini / Anthropic / OpenAI (Responses + Chat); pluggable |
 | UI | rich + prompt_toolkit | rich + prompt_toolkit | rich + prompt_toolkit |
 | MCP servers | yes | no | yes |
 | Plugins | yes | no | yes |
@@ -408,8 +439,8 @@ python tests/probe_ascii_only.py   # verify
 | Hooks | yes | no | yes |
 | Repo-map | no | yes (tree-sitter) | yes (Python stdlib `ast` only) |
 | Shadow-git | yes | no | yes |
-| LOC | closed-source | ~20K LOC | ~5800 LOC |
-| Deps | closed-source | ~30 | 4 |
+| LOC | closed-source | ~20K LOC | ~6500 LOC |
+| Deps | closed-source | ~30 | 4 + 1 per provider (lazy) |
 
 open-code is not trying to beat them. It's trying to be small enough
 that you can read every line in an afternoon, hackable enough that

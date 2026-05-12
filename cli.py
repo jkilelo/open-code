@@ -381,11 +381,23 @@ def main(argv: list[str] | None = None) -> int:
         )
     # If settings.model is set and the user didn't override on the CLI,
     # honor it. (CLI default is DEFAULT_MODEL when --model wasn't passed.)
-    if settings.model and args.model == os.environ.get(
+    # Priority: --model > OPEN_CODE_MODEL > settings.llm.model >
+    # settings.model (legacy top-level) > DEFAULT_MODEL.
+    cli_default = os.environ.get(
         "OPEN_CODE_MODEL",
         __import__("open_code").DEFAULT_MODEL,
-    ):
-        args.model = settings.model
+    )
+    if args.model == cli_default:
+        # User didn't pass --model. Walk the settings chain.
+        raw = getattr(settings, "raw", None) or {}
+        llm_cfg = raw.get("llm") if isinstance(raw, dict) else None
+        nested_model = (
+            llm_cfg.get("model") if isinstance(llm_cfg, dict) else None
+        )
+        if nested_model:
+            args.model = nested_model
+        elif settings.model:
+            args.model = settings.model
     if (settings.max_iterations is not None and
             args.max_iterations == int(os.environ.get(
                 "OPEN_CODE_MAX_ITER",
