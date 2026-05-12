@@ -1603,7 +1603,14 @@ def run_loop(
                         Part.make_tool_result(name, result, tool_call_id=call_id)
                     )
 
-                tool_content = Message(role="user", parts=tool_result_parts)
+                # Use the neutral "tool" role so each adapter can map it
+                # to its provider's idiom: Gemini -> user-role, Anthropic ->
+                # user-role with tool_result blocks, OpenAI Responses ->
+                # top-level function_call_output items, OpenAI Chat ->
+                # role="tool" message per tool_result. The OpenAI Responses
+                # adapter requires role="tool" because it lifts tool_results
+                # out of the message and emits them as separate input items.
+                tool_content = Message(role="tool", parts=tool_result_parts)
                 history.append(tool_content)
                 if store is not None and session is not None:
                     store.append_message(session, tool_content)

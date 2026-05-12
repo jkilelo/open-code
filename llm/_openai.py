@@ -266,6 +266,20 @@ class OpenAIResponsesClient(BaseLLMClient):
                         "encrypted_content": p.extra["encrypted_content"],
                     })
                     continue
+                if p.is_tool_result():
+                    # Legacy sessions stored tool_result Parts inside
+                    # user-role messages (the role="tool" convention is
+                    # post-v0.30.2). Lift them to top-level
+                    # function_call_output items so resume keeps working.
+                    out.append({
+                        "type": "function_call_output",
+                        "call_id": p.tool_call_id or "",
+                        "output": (
+                            json.dumps(p.tool_result)
+                            if p.tool_result else ""
+                        ),
+                    })
+                    continue
                 if p.is_text() and p.text:
                     kind = "input_text" if role == "user" else "output_text"
                     content_parts.append({"type": kind, "text": p.text})
