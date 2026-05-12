@@ -669,6 +669,50 @@ Bonus: OpenAI account hit `insufficient_quota` (429) before quota was added. Ada
 
 **v0.30.1 ships [OK].** 49/49 probes. ASCII pure. All three providers wire-verified across 18 live tests. README + LEARN.md updated for provider-agnostic intro + provider table.
 
+---
+
+## v0.30.2 -- 2026-05-12 (REPL-on-Anthropic finds 6 bugs)
+
+Running the full REPL on Anthropic (not just adapter smoke) found 6 v0.30.0/.1 regressions: cli passing Gemini key to all providers, settings.llm.model ignored, REPL banner hardcoded "Gemini", uppercase JSON Schema types, missing tool_call_id round-trip, Windows cp1252 stdout. Docs updated.
+
+**v0.30.2 ships [OK].** 49/49 probes; live Anthropic REPL end-to-end.
+
+## v0.30.3 -- 2026-05-12 (OpenAI REPL parity)
+
+Flipping settings to provider=openai found 1 more bug: run_loop wrote tool-result messages with role="user"; OpenAI Responses adapter only emitted function_call_output items when role="tool". Switched to neutral ROLE_TOOL; added legacy fallback in _openai.py.
+
+**v0.30.3 ships [OK].** 49/49 probes; live OpenAI REPL end-to-end.
+
+## v0.30.4 -- 2026-05-12 (openai_chat wire-verified)
+
+Last untested provider. Worked first try -- the role="tool" fix from v0.30.3 carried through symmetrically. 6/6 smoke tests pass on the Chat Completions endpoint. README "Verified" column complete.
+
+**v0.30.4 ships [OK].**
+
+## v0.30.5 -- 2026-05-12 (8-gap doc sweep)
+
+Honest audit of "are the docs up to date" found 8 gaps. Fixed all: stale requirements.txt, POSIX-only quickstart, model name mismatch, undocumented --model + OPEN_CODE_MODEL, opaque openai-vs-openai_chat distinction, undocumented reasoning-token budget gotcha, INSTALL.md confusable, _live_*_check.py invisible.
+
+**v0.30.5 ships [OK].** All docs match code.
+
+---
+
+## v0.31.0 -- 2026-05-12 (Anthropic prompt caching auto-injection)
+
+Roadmap item #1 from my "what to ship next" pick. Anthropic adapter
+now auto-anchors two cache_control breakpoints (end of tools, end of
+system) when `settings.llm.extra.cache.enabled = true`. ttl="1h"
+auto-adds the `extended-cache-ttl-2025-04-11` beta header.
+
+Live verified (`tests/_live_anthropic_cache_check.py`):
+- Call 1: 17 input + 16,801 cache_write
+- Call 2 (same system prompt, different user message): 17 input + 16,801 cache_read
+- Call 3 (uncached client): 16,818 input + 0 cache activity
+
+~90% cost reduction on cached prefix (cache_read tokens billed at 0.1x input rate).
+
+**v0.31.0 ships [OK].** 49/49 probes; ASCII pure; cache cycle verified on Haiku 4.5.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

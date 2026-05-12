@@ -301,6 +301,47 @@ specific knobs (Gemini `safety_settings`, Anthropic `betas`, OpenAI
 OpenAI's reasoning `encrypted_content`) through JSONL storage, so
 `--resume` works across providers without losing reasoning context.
 
+### Anthropic prompt caching (v0.31+)
+
+Opt in via `settings.llm.extra.cache.enabled = true`. The adapter
+auto-anchors two cache breakpoints per request: one at the end of
+the tools list, one at the end of the system instruction. Both
+positions terminate the cacheable prefix, so any large stable
+content (system prompt, repo-map, project memory, tool defs) sits
+inside the cached region.
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "model":    "claude-haiku-4-5",
+    "extra":    {"cache": {"enabled": true, "ttl": "5m"}}
+  }
+}
+```
+
+`ttl` is `"5m"` (default) or `"1h"`. Picking `"1h"` auto-adds the
+required `extended-cache-ttl-2025-04-11` beta header.
+
+Anthropic enforces a per-model minimum-tokens-for-caching:
+
+| Model                             | Min tokens for cache to activate |
+|-----------------------------------|----------------------------------|
+| Opus 4.7 / 4.6 / 4.5, Haiku 4.5   | 4096                             |
+| Sonnet 4.6                        | 2048                             |
+| Sonnet 4.5 / 4 / 3.7, Haiku 3.5   | 1024                             |
+
+Below the threshold, the call succeeds but `usage.cache_creation_input_tokens`
+and `usage.cache_read_input_tokens` are silently 0. Cost savings
+(visible on follow-up calls with the same prefix) are roughly
+**90% on the cached portion** -- e.g. a 16,801-token system prompt
+served from cache costs 0.1x what it would uncached. Live
+verification: `tests/_live_anthropic_cache_check.py`.
+
+Caching is opt-in because cached prompts persist on Anthropic's
+infrastructure for the TTL; enable it only if that matches your
+data policy.
+
 ### Gotchas worth knowing
 
 - **gpt-5 reasoning models eat token budget invisibly.** Even at

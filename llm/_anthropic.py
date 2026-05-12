@@ -200,8 +200,11 @@ class AnthropicClient(BaseLLMClient):
         elif kw.get("user"):
             params["metadata"] = {"user_id": str(kw["user"])}
 
-        # Provider-specific knobs via extra={}
-        extra = dict(kw.get("extra") or {})
+        # Provider-specific knobs via extra={}. Per-call kw["extra"]
+        # wins over the constructor-level self._extra.
+        extra = {**(self._extra or {}), **(kw.get("extra") or {})}
+        # Consume cache config (handled separately below)
+        cache_cfg = extra.pop("cache", None)
         for k in (
             "betas", "service_tier", "container", "mcp_servers",
             "extra_headers", "extra_query", "extra_body", "timeout",
@@ -212,7 +215,59 @@ class AnthropicClient(BaseLLMClient):
         if extra:
             params.setdefault("extra_body", {}).update(extra)
 
+        # Auto-inject Anthropic prompt-cache breakpoints. Opt-in via
+        # settings.llm.extra.cache.enabled=true (or per-call
+        # extra={"cache":{"enabled":True,"ttl":"5m"|"1h"}}). Anchors
+        # are placed at the END of stable content (last tool def
+        # + system text) so the cacheable prefix terminates there.
+        # Two anchors stays well under the 4-breakpoint limit.
+        # ttl="1h" requires beta header extended-cache-ttl-2025-04-11.
+        self._apply_cache_control(params, cache_cfg)
+
         return params
+
+    @staticmethod
+    def _apply_cache_control(
+        params: dict[str, Any], cache_cfg: Any,
+    ) -> None:
+        if not isinstance(cache_cfg, dict) or not cache_cfg.get("enabled"):
+            return
+        ttl = cache_cfg.get("ttl") or "5m"
+        marker: dict[str, Any] = {"type": "ephemeral"}
+        if ttl == "1h":
+            marker["ttl"] = "1h"
+            # The user MUST also pass the beta header for 1h to work.
+            # If they didn't, we add it -- silently fixing the gotcha
+            # rather than letting the call fail with an obscure error.
+            betas = list(params.get("betas") or [])
+            beta_name = "extended-cache-ttl-2025-04-11"
+            if beta_name not in betas:
+                betas.append(beta_name)
+                params["betas"] = betas
+
+        # Anchor 1: end of tools list (caches the full tools block).
+        tools = params.get("tools")
+        if tools:
+            last_tool = tools[-1]
+            if isinstance(last_tool, dict):
+                last_tool["cache_control"] = dict(marker)
+
+        # Anchor 2: end of system text (caches system + everything
+        # before it -- prompt-cache treats anchors as prefix terminators).
+        sys_val = params.get("system")
+        if sys_val:
+            if isinstance(sys_val, str):
+                # Convert to the list-of-text-blocks shape that Anthropic
+                # requires for cache_control on the system field.
+                params["system"] = [{
+                    "type": "text",
+                    "text": sys_val,
+                    "cache_control": dict(marker),
+                }]
+            elif isinstance(sys_val, list) and sys_val:
+                last = sys_val[-1]
+                if isinstance(last, dict):
+                    last["cache_control"] = dict(marker)
 
     @staticmethod
     def _pydantic_schema(model: Any) -> dict[str, Any]:
