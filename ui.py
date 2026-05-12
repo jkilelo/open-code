@@ -173,8 +173,23 @@ class UI:
     def _rich_console(self) -> Any:
         if self._console is None and self.mode == MODE_RICH:
             from rich.console import Console
+            # IMPORTANT: use `stderr=` flag, NOT `file=sys.stderr`.
+            # Rich's Console with file= captures the file reference
+            # at __init__ time. When Live activates with
+            # redirect_stderr=True, it REPLACES sys.stderr with a
+            # redirector -- but a Console with the captured ref
+            # bypasses the redirect, so console.print lands inside
+            # the live area and gets erased on the next refresh.
+            # The `stderr=True` flag makes Console look up
+            # `sys.stderr` dynamically on each write, so writes
+            # flow through Live's redirector.
+            # First v0.27.2 real-terminal run had this exact bug:
+            # streamed model text (uses sys.stdout, picked up the
+            # redirect) was visible; tool call render lines (use
+            # console.print, captured the original stderr) were
+            # eaten.
             self._console = Console(
-                file=self._stream,
+                stderr=self._stderr,
                 # Let rich auto-detect color support. Setting
                 # force_terminal=True here would defeat NO_COLOR
                 # downstream tools, so we leave it None.

@@ -593,7 +593,7 @@ Root cause: `ui.LiveStatusPanel.start` constructed `Live(..., redirect_stdout=Fa
 |------|--------|
 | Drop the override -- use Rich Live defaults (redirect_stdout/stderr=True) | [OK] |
 | Source-inspection regression probe asserts `redirect_stdout=False` / `redirect_stderr=False` are NOT in `LiveStatusPanel.start` source | [OK] |
-| ASCII encoding sweep -- 2 leftover `·` chars in gap-log.md + runs/v0.27.1.md normalized | [OK] |
+| ASCII encoding sweep -- 2 leftover `.` chars in gap-log.md + runs/v0.27.1.md normalized | [OK] |
 
 The class of bug (only surfaces in a real TTY) is exactly what probes can't catch. Lesson: live-run validation matters; the brutal-review discipline applies to UX features too.
 

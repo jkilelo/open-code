@@ -265,6 +265,20 @@ assert "redirect_stderr=False" not in panel_src
 print("[PASS] LiveStatusPanel: stdout/stderr redirect not disabled")
 
 
+# Rich Console construction regression (real-terminal bug from
+# v0.27.2 first run: Console(file=sys.stderr) captures the original
+# stderr reference. When Live replaces sys.stderr with a redirector,
+# Console writes bypass the redirect and land inside the live area,
+# getting erased. Use Console(stderr=True) so the lookup is dynamic.
+console_src = inspect.getsource(UI_MOD.UI._rich_console)
+assert "file=self._stream" not in console_src, (
+    "v0.27.2 regression: Console(file=sys.stderr) captures the "
+    "reference at construction time; Live(redirect_stderr=True) "
+    "then bypasses it. Use Console(stderr=...) flag instead."
+)
+print("[PASS] _rich_console: uses stderr= flag, not file=")
+
+
 # token formatter
 assert UI_MOD._fmt_tokens(0) == "0"
 assert UI_MOD._fmt_tokens(999) == "999"
