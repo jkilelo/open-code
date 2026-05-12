@@ -495,6 +495,25 @@ Back-compat: original render functions kept exported (`skills.render_skill_listi
 
 **v0.25.3 ships [OK].** 45/45 probes green. Aider-style stack honestly complete.
 
+---
+
+## v0.26.0 -- 2026-05-12 (Tier 3 launch: dynamic agent self-extension)
+
+User asked for: dynamic specialist-agent generation. When the user asks domain-specific questions, the system either routes to an existing specialist or builds one and saves it permanently. Subsequent questions in that domain hit the cache.
+
+| Component | Status | Evidence |
+|-----------|--------|----------|
+| `agent_search.py` (~290 LOC) -- BM25 over the merged agent library, k1=1.5 b=0.75, sub-ms search, mtime-keyed cache | [OK] | `tests/probe_agent_search.py` 7/7: tokenizer drops stopwords + 1-char, BM25 ranks right doc for SQL/web/ML queries, empty lib OK, unknown query terms ignored, user shadows autobuild on name collision, cache rebuilds on mtime change |
+| `agent_builder.py` (~310 LOC) -- 100+ line architect meta-prompt with strict template (role/expert/workflow/output/examples/edges/refusal); validation gates; allowed-tools allowlist (read_file + list_dir only); kebab-case + dedup; `dry_run` preview | [OK] | `tests/probe_agent_builder.py` 10/10: valid response validates, name dedup `-2 -3`, missing section / frontmatter / non-kebab fail, escalating tools filtered, end-to-end build with stub LLM, dry_run, LLM exception captured, malformed output preserved in raw_response |
+| Tools: `find_specialist(query, limit)` + `request_specialist(domain, task_example, notes)` declarations in `tools.py`; dispatch handlers in `open_code.py` | [OK] | model can call both; emits `agent_built` JSON event in --print mode |
+| System instruction updated with 4-step decision flow (find -> threshold check -> request -> delegate) | [OK] | grep finds the new prose in open_code.py |
+| `subagents.discover_agents()` now scans both `.open-code/agents/` AND `.open-code/autobuild-agents/`; user shadows autobuild on name collision | [OK] | regression suite passes; new agents reachable via `delegate(...)` |
+| `--no-autobuild` CLI flag; `/autobuild` REPL command (status, on, off, search) | [OK] | shown in `--help`; SLASH_COMMANDS extended for tab-complete |
+
+Defense in depth: autobuilt agents are restricted to `read_file` + `list_dir`. Escalation to `run_shell` / `write_file` / `apply_patch` requires the user to hand-edit the generated file. Name collision with hand-curated agents at `.open-code/agents/` always favors the curated version.
+
+**v0.26.0 ships [OK].** 47/47 probes green (45 prior + 2 new). 54/54 security tests. ASCII guard still pure.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

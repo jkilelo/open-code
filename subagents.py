@@ -104,18 +104,31 @@ def load_agent_file(path: Path) -> Agent | None:
 
 
 def discover_agents(cwd: Path) -> list[Agent]:
-    """Find every `*.md` under `<cwd>/.open-code/agents/`."""
+    """Find every `*.md` under both `.open-code/agents/` and
+    `.open-code/autobuild-agents/` (Tier 3 -- dynamic agent library).
+
+    Hand-written agents take precedence on name collision: a user
+    deliberately curated agent can't be shadowed by an autobuild.
+    """
+    by_name: dict[str, Agent] = {}
+    # Autobuild first; hand-written overrides below.
+    autobuild = cwd / ".open-code/autobuild-agents"
+    if autobuild.exists() and autobuild.is_dir():
+        for p in sorted(autobuild.iterdir()):
+            if not p.is_file() or p.suffix.lower() != ".md":
+                continue
+            a = load_agent_file(p)
+            if a is not None:
+                by_name[a.name] = a
     root = cwd / AGENTS_REL
-    if not root.exists() or not root.is_dir():
-        return []
-    out: list[Agent] = []
-    for p in sorted(root.iterdir()):
-        if not p.is_file() or p.suffix.lower() != ".md":
-            continue
-        a = load_agent_file(p)
-        if a is not None:
-            out.append(a)
-    return out
+    if root.exists() and root.is_dir():
+        for p in sorted(root.iterdir()):
+            if not p.is_file() or p.suffix.lower() != ".md":
+                continue
+            a = load_agent_file(p)
+            if a is not None:
+                by_name[a.name] = a  # user shadows autobuild
+    return list(by_name.values())
 
 
 def find_agent_by_name(cwd: Path, name: str) -> Agent | None:

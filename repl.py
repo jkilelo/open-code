@@ -52,6 +52,10 @@ Slash commands:
   /undo [N]          restore to the start of the Nth-most-recent turn (default N=1)
   /loop <interval> <task>    repeat a task every <interval> (e.g. 30, 5m, 1h). Ctrl-C to stop.
   /schedule <delay> <task>   run a task once after <delay> (e.g. 60, 10m, 2h). Ctrl-C cancels.
+  /autobuild                 show autobuild status + list built specialists
+  /autobuild on              re-enable autobuild for this session
+  /autobuild off             disable autobuild for this session
+  /autobuild search <q>      BM25 search across the agent library
   /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
   /plan <task>       run <task> in plan mode (read-only); save result as a plan event
   /act [task]        load most recent plan; switch to acceptEdits; execute
@@ -132,6 +136,7 @@ def run_repl(
         "/checkpoints", "/checkpoint", "/restore", "/undo",
         "/mode", "/plan", "/act",
         "/loop", "/schedule",
+        "/autobuild",
     ]
     # Persistent input history: ~/.open-code/history.txt. Survives
     # across REPL launches so Up-arrow gives you yesterday's prompts.
@@ -633,6 +638,69 @@ def run_repl(
                 else:
                     settings.mode = rest
                 print(f"[mode set to {rest!r}]")
+                continue
+            if cmd == "autobuild":
+                # Tier 3: agent autobuild status + control.
+                import agent_search as _search
+                sub = rest.strip().split(None, 1)
+                action = sub[0].lower() if sub else ""
+                action_arg = sub[1].strip() if len(sub) > 1 else ""
+                if settings is None:
+                    from settings import Settings as _S
+                    settings = _S()
+                if not hasattr(settings, "raw") or not isinstance(
+                        settings.raw, dict):
+                    settings.raw = {}
+                ab_cfg = settings.raw.setdefault("autobuild", {})
+                if not action:
+                    enabled = ab_cfg.get("enabled", True)
+                    print(f"autobuild: {'on' if enabled else 'off'}")
+                    docs = _search.discover_indexable_agents(cwd)
+                    if not docs:
+                        ui.empty_listing("(no agents in library yet)",
+                                         kind="agents")
+                    else:
+                        ui.table(
+                            title=f"Agent library ({len(docs)} total)",
+                            columns=["NAME", "SOURCE", "DOMAIN",
+                                     "DESCRIPTION"],
+                            rows=[
+                                [d.name, d.source, d.domain or "-",
+                                 (d.description[:55] + "...")
+                                 if len(d.description) > 55
+                                 else d.description]
+                                for d in docs
+                            ],
+                        )
+                elif action == "on":
+                    ab_cfg["enabled"] = True
+                    print("[autobuild: on]")
+                elif action == "off":
+                    ab_cfg["enabled"] = False
+                    print("[autobuild: off]")
+                elif action == "search":
+                    if not action_arg:
+                        print("usage: /autobuild search <query>")
+                        continue
+                    hits = _search.search_agents(cwd, action_arg, limit=10)
+                    if not hits:
+                        ui.empty_listing(f"[no matches for {action_arg!r}]",
+                                         kind="agents")
+                    else:
+                        ui.table(
+                            title=f"BM25 matches for {action_arg!r}",
+                            columns=["SCORE", "NAME", "SOURCE",
+                                     "DESCRIPTION"],
+                            rows=[
+                                [f"{score:.3f}", doc.name, doc.source,
+                                 (doc.description[:50] + "...")
+                                 if len(doc.description) > 50
+                                 else doc.description]
+                                for doc, score in hits
+                            ],
+                        )
+                else:
+                    print(f"unknown /autobuild action: {action!r}")
                 continue
             if cmd in ("loop", "schedule"):
                 # Tier 2 #24: /loop and /schedule

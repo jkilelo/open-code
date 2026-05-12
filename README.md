@@ -225,6 +225,42 @@ sentence: "There are N <type> files: a, b, c."
 The main agent calls `delegate(agent="counter", task="count .txt
 files")`; the subagent gets its own isolated transcript.
 
+## Dynamic specialist agents (autobuild)
+
+The system grows specialists on demand. When the user asks something
+domain-specific (SQL, scraping, ML, infra, security, testing), the
+model:
+
+1. Calls `find_specialist(query)` -- BM25 search across
+   `.open-code/agents/` + `.open-code/autobuild-agents/`
+2. If a strong match exists, delegates to it
+3. Else calls `request_specialist(domain, task_example, notes)`
+   which runs an architect meta-prompt to author a structured agent
+   file with role / expert knowledge / workflow / examples / edge
+   cases / refusal cases. The file is validated, deduplicated, and
+   saved to `.open-code/autobuild-agents/<name>.md`
+4. Immediately delegates to the new specialist
+
+Each novel domain teaches the library. By turn 4 you typically have
+3-5 specialists; subsequent questions route in microseconds via BM25.
+
+Defense in depth: autobuilt agents are restricted to read-only tools
+(`read_file`, `list_dir`). Promoting to `run_shell` / `write_file` /
+`apply_patch` requires the user to hand-edit the generated file.
+Hand-curated agents in `.open-code/agents/` always shadow autobuild
+on name collision.
+
+REPL commands:
+- `/autobuild` -- show status + table of the full agent library
+- `/autobuild on` / `/autobuild off` -- session toggle
+- `/autobuild search <query>` -- direct BM25 query (debugging)
+
+CLI: `--no-autobuild` disables the capability for one invocation.
+
+Probes: `tests/probe_agent_search.py` (7 BM25 assertions),
+`tests/probe_agent_builder.py` (10 validation + end-to-end
+assertions with a stub LLM).
+
 ## Plugins
 
 A plugin bundles skills + agents + styles into one installable unit.

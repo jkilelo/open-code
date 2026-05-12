@@ -385,6 +385,96 @@ APPLY_PATCH_TOOL_DECLARATION = {
 TOOL_DECLARATIONS.append(APPLY_PATCH_TOOL_DECLARATION)
 
 
+# ---------------------------------------------------------------------------
+# Specialist autobuild tools (Tier 3 -- agent self-extension)
+# ---------------------------------------------------------------------------
+# These tools let the model search and request new specialist agents
+# on demand. Implementations live in open_code._tool_find_specialist /
+# _tool_request_specialist so they can hold a reference to the genai
+# client + the current cwd at run-time (the tool functions here are
+# stateless).
+
+FIND_SPECIALIST_DECL: dict = {
+    "name": "find_specialist",
+    "description": (
+        "Search the agent library for a specialist matching the user's "
+        "domain need. Returns ranked matches with BM25 scores. Call this "
+        "when the user asks something domain-specific (SQL, data, web "
+        "scraping, ML, infra, security, testing, etc) BEFORE attempting "
+        "to answer it yourself, so you can delegate to the right "
+        "specialist. If the top score is above ~0.6 the match is strong; "
+        "below that, consider request_specialist."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": (
+                    "Domain-flavored search query, e.g. "
+                    "'sql query customer purchases' or 'web scraper "
+                    "javascript-rendered'. Keyword-rich is better than "
+                    "natural language."
+                ),
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max matches to return (default 5).",
+            },
+        },
+        "required": ["query"],
+    },
+}
+
+
+REQUEST_SPECIALIST_DECL: dict = {
+    "name": "request_specialist",
+    "description": (
+        "Request the open-code system to BUILD a new specialist agent "
+        "for a domain that isn't well-covered by the existing library. "
+        "Use this when find_specialist returned no strong match AND "
+        "the task would benefit from a reusable specialist. The system "
+        "runs a meta-prompt to author a structured agent file with "
+        "role/expert-knowledge/workflow/examples/edge-cases. The new "
+        "specialist is saved permanently to .open-code/autobuild-agents/ "
+        "and immediately available via delegate(). Returns the new "
+        "agent's name on success."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "domain": {
+                "type": "string",
+                "description": (
+                    "One word: sql, data, web, ml, infra, security, "
+                    "docs, testing, other."
+                ),
+            },
+            "task_example": {
+                "type": "string",
+                "description": (
+                    "The user's prompt verbatim, or a representative "
+                    "example of the kind of task this specialist will "
+                    "handle. Concrete > abstract."
+                ),
+            },
+            "notes": {
+                "type": "string",
+                "description": (
+                    "Optional extra context to guide the meta-prompt "
+                    "(constraints, tech stack, output format hints)."
+                ),
+            },
+        },
+        "required": ["domain", "task_example"],
+    },
+}
+
+
+TOOL_DECLARATIONS.append(FIND_SPECIALIST_DECL)
+TOOL_DECLARATIONS.append(REQUEST_SPECIALIST_DECL)
+
+
 TOOL_FUNCTIONS = {
     "read_file": tool_read_file,
     "write_file": tool_write_file,
@@ -392,3 +482,6 @@ TOOL_FUNCTIONS = {
     "run_shell": tool_run_shell,
     "apply_patch": tool_apply_patch,
 }
+# Note: find_specialist + request_specialist are dispatched specially
+# in open_code._dispatch_tool (they need access to the model client
+# + cwd, which the stateless TOOL_FUNCTIONS dict can't carry).

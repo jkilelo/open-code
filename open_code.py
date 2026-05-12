@@ -150,9 +150,32 @@ MODEL_FALLBACK_CHAIN = [
 SYSTEM_INSTRUCTION = """\
 You are open-code, a terminal coding agent.
 
-You have four tools: read_file, write_file, list_dir, run_shell. Use
-them to accomplish the user's task. After each tool call you'll see
-its result; decide the next step.
+You have four base tools: read_file, write_file, list_dir, run_shell.
+Use them to accomplish the user's task. After each tool call you'll
+see its result; decide the next step.
+
+Two additional capabilities help with specialist work:
+
+- find_specialist(query) -- BM25 search across the agent library
+  (.open-code/agents/ + .open-code/autobuild-agents/). Call this FIRST
+  whenever the user asks something domain-specific (SQL, data,
+  scraping, ML, infra, security, testing). If the top match scores
+  >= 0.6, prefer delegate(agent=<name>, task=...) over answering
+  directly -- the specialist has hard-won domain knowledge baked in.
+- request_specialist(domain, task_example, notes) -- build a new
+  specialist on demand when find_specialist returned no strong match.
+  The system runs a meta-prompt to author a structured agent file
+  (role, expert knowledge, workflow, examples, edge cases) and saves
+  it permanently. After it returns, call delegate(agent=<the new
+  name>, task=...) to use it. This compounds: every novel domain
+  the user touches teaches the library.
+
+The decision flow for a domain-specific question:
+  1. find_specialist(query) with keyword-rich terms.
+  2. If top score >= 0.6: delegate to that specialist.
+  3. Else if the task warrants a reusable specialist:
+     request_specialist(...) then delegate to the new agent.
+  4. Else: answer using the base tools.
 
 Rules:
 - Work in the user's current directory unless they explicitly point
@@ -634,6 +657,142 @@ def _stream_iter_response(
         sys.stdout.write("\n")
         sys.stdout.flush()
     return all_parts, function_calls, usage
+
+
+def _handle_find_specialist(args: dict[str, Any], *, cwd: Path) -> dict[str, Any]:
+    """Tool: BM25 search for matching specialists.
+
+    Returns up to `limit` matches with descriptive fields and scores.
+    Empty list when there are no agents OR no terms match.
+    """
+    import agent_search as _search
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return {"ok": False, "error": "query is required"}
+    try:
+        limit_raw = args.get("limit", 5)
+        limit = max(1, min(20, int(limit_raw)))
+    except (TypeError, ValueError):
+        limit = 5
+    try:
+        results = _search.search_agents(cwd, query, limit=limit)
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"search failed: {type(exc).__name__}: {exc}"}
+    matches = [
+        {
+            "name": doc.name,
+            "description": doc.description,
+            "domain": doc.domain,
+            "capabilities": list(doc.capabilities),
+            "source": doc.source,
+            "score": round(score, 4),
+            "path": str(doc.path) if doc.path else "",
+        }
+        for doc, score in results
+    ]
+    return {"ok": True, "matches": matches, "count": len(matches)}
+
+
+def _autobuild_enabled(settings: Any) -> bool:
+    """Honor settings.autobuild.enabled with a True default."""
+    raw = getattr(settings, "raw", None) or {}
+    ab = raw.get("autobuild") if isinstance(raw, dict) else None
+    if not isinstance(ab, dict):
+        return True
+    return bool(ab.get("enabled", True))
+
+
+def _handle_request_specialist(
+    args: dict[str, Any],
+    *,
+    cwd: Path,
+    api_key: str,
+    default_model: str,
+    settings: Any,
+    ui: Any,
+) -> dict[str, Any]:
+    """Tool: build a new specialist agent via the architect meta-prompt.
+
+    Wraps `agent_builder.build_agent` with the live genai client as
+    the LLM callable. Emits both stderr UI feedback and the JSON
+    `agent_built` envelope when --print mode is active.
+    """
+    if not _autobuild_enabled(settings):
+        return {
+            "ok": False,
+            "error": (
+                "autobuild is disabled in settings.autobuild.enabled. "
+                "Enable it or build the specialist by hand."
+            ),
+        }
+    domain = str(args.get("domain") or "").strip().lower()
+    task_example = str(args.get("task_example") or "").strip()
+    notes = str(args.get("notes") or "").strip()
+    if not task_example:
+        return {"ok": False, "error": "task_example is required"}
+
+    import agent_builder as _ab
+    # Build the LLM callable. Single-shot generate_content with the
+    # current default model; respect settings.architect_model if set.
+    architect_model = (
+        getattr(settings, "architect_model", None) or default_model
+    )
+
+    def _llm(prompt: str) -> str:
+        client = genai.Client(api_key=api_key)
+        resp = client.models.generate_content(
+            model=architect_model, contents=prompt,
+        )
+        text = getattr(resp, "text", None)
+        if not text:
+            # Older SDK shapes
+            try:
+                cand = resp.candidates[0]
+                text = "".join(
+                    getattr(p, "text", "") or ""
+                    for p in (cand.content.parts or [])
+                )
+            except Exception:
+                text = ""
+        return text or ""
+
+    if ui is not None and hasattr(ui, "info"):
+        ui.info(
+            f"[autobuild] generating specialist for domain={domain or '?'} "
+            f"using {architect_model}..."
+        )
+    result = _ab.build_agent(
+        cwd, llm=_llm,
+        domain_hint=domain, task_example=task_example, notes=notes,
+    )
+    _ev_payload = _ab.build_event_payload(result)
+    _ev_type = _ev_payload.pop("type")
+    _emit_json(_ev_type, **_ev_payload)
+    if not result.ok:
+        if ui is not None and hasattr(ui, "warn"):
+            ui.warn(f"[autobuild] failed: {result.error}")
+        return {
+            "ok": False,
+            "error": result.error,
+            "raw_response_excerpt": result.raw_response[:300],
+        }
+    if ui is not None and hasattr(ui, "info"):
+        ui.info(
+            f"[autobuild] saved {result.name} "
+            f"({result.domain}) at {result.path}"
+        )
+    return {
+        "ok": True,
+        "name": result.name,
+        "domain": result.domain,
+        "description": result.description,
+        "path": str(result.path) if result.path else "",
+        "hint": (
+            f"Now call delegate(agent={result.name!r}, task=...) to "
+            "have this specialist handle the user's task."
+        ),
+    }
 
 
 def _handle_delegate_call(
@@ -1180,6 +1339,18 @@ def run_loop(
                             api_key=api_key, default_model=current_model,
                             cwd=CONFIG.cwd, system_instruction=system_instruction,
                             settings=settings,
+                        )
+                    elif name == "find_specialist":
+                        # Tier 3: BM25 search across the agent library.
+                        result = _handle_find_specialist(
+                            args, cwd=CONFIG.cwd,
+                        )
+                    elif name == "request_specialist":
+                        # Tier 3: build a new specialist on demand.
+                        result = _handle_request_specialist(
+                            args, cwd=CONFIG.cwd,
+                            api_key=api_key, default_model=current_model,
+                            settings=settings, ui=ui,
                         )
                     elif name.startswith("mcp__") and _MCP_CLIENT is not None:
                         result = _MCP_CLIENT.call_tool(name, args)

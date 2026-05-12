@@ -161,6 +161,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="List installed plugins (Tier 2 #22) -- project + user -- and exit.",
     )
     parser.add_argument(
+        "--no-autobuild",
+        action="store_true",
+        help="Disable the agent-autobuild capability for this invocation "
+             "(Tier 3). When enabled (default), the model can call "
+             "request_specialist(...) to dynamically generate new "
+             "specialist agents saved at .open-code/autobuild-agents/.",
+    )
+    parser.add_argument(
         "--auto-checkpoint",
         action="store_true",
         help="Take a shadow-git snapshot of the working tree at the "
@@ -270,6 +278,15 @@ def main(argv: list[str] | None = None) -> int:
         settings.effort = args.effort
     if args.auto_checkpoint:
         settings.auto_checkpoint = True
+    if args.no_autobuild:
+        # Bypass the settings.autobuild.enabled default by stashing a
+        # disable flag into raw. _autobuild_enabled in open_code.py
+        # reads from settings.raw["autobuild"]["enabled"].
+        if not isinstance(getattr(settings, "raw", None), dict):
+            settings.raw = {}
+        ab = settings.raw.setdefault("autobuild", {})
+        if isinstance(ab, dict):
+            ab["enabled"] = False
     if args.style is not None:
         settings.output_style = args.style
 
