@@ -527,6 +527,15 @@ def build_agent(
     """
     existing = discover_indexable_agents(cwd)
     existing_names = {a.name for a in existing}
+    # Y3 fix: discover_indexable_agents skips .pending/ (correct --
+    # pending agents aren't searchable). But the validator's
+    # dedup logic must SEE pending names, otherwise a second
+    # `request_specialist` call with the same intent silently
+    # overwrites the prior pending file. Glob the pending dir too.
+    pending_dir = cwd / AUTOBUILD_AGENTS_REL / PENDING_SUBDIR
+    if pending_dir.is_dir():
+        for p in pending_dir.glob("*.md"):
+            existing_names.add(p.stem)
     prompt = render_meta_prompt(
         domain_hint=domain_hint,
         task_example=task_example,
@@ -573,15 +582,17 @@ def build_agent(
         target_dir = autobuild_root / PENDING_SUBDIR
         target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / f"{meta['name']}.md"
-    # B1 + Path safety: re-resolve and confirm the path lives strictly
-    # inside the autobuild directory before writing. The name regex
-    # ^[a-z][a-z0-9-]*$ already prevents traversal, but a layered
-    # check here is cheap and means a future regex regression can't
-    # let `..` reach disk.
+    # B1 + Path safety (v0.26.1's startswith check was a layered-
+    # defense regression hazard: `/x/autobuild-agents-evil/y.md`
+    # startswith `/x/autobuild-agents` returns True). Path.is_relative_to
+    # compares structural components, which is the canonical safe
+    # form. The name regex `^[a-z][a-z0-9-]*$` already prevents
+    # traversal, so this triggers only if that regex regresses --
+    # which is exactly when a layered defense should hold.
     try:
         resolved = target_path.resolve(strict=False)
         root_resolved = autobuild_root.resolve(strict=False)
-        if not str(resolved).startswith(str(root_resolved)):
+        if not resolved.is_relative_to(root_resolved):
             return BuildResult(
                 ok=False,
                 error=(
@@ -595,12 +606,13 @@ def build_agent(
             ok=False, error=f"path resolution failed: {exc}",
             raw_response=raw,
         )
-    # Versioning: when overwriting an existing LIVE agent (auto_approve
-    # path, name collided through validator's dedup), archive the
-    # outgoing copy before writing. Validator's _unique_name suffixes
-    # collisions, so the LIVE path is fresh by name; this still
-    # protects against future edits that re-build under the same name.
-    if auto_approve and target_path.is_file():
+    # Versioning: archive any pre-existing file at the target path
+    # (live OR pending) before overwriting. The validator's
+    # `_unique_name` dedup makes collisions rare, but this is the
+    # belt-and-braces guard: a race or a bypass that lets us reach
+    # here with target_path.is_file() should NOT silently drop the
+    # outgoing content.
+    if target_path.is_file():
         _archive_existing(cwd, meta["name"], target_path)
     try:
         target_path.write_text(_serialize(meta), encoding="utf-8")

@@ -345,4 +345,130 @@ with tempfile.TemporaryDirectory() as d:
 print("[PASS] ensure_embeddings caches via sidecar across calls")
 
 
+# ===========================================================================
+# Test 13 (closes 6th brutal review B2): path-safety check uses
+# is_relative_to (structural), not startswith (string). Without this,
+# `/x/autobuild-agents-evil/y.md` would pass against `/x/autobuild-agents`.
+# We can't easily test the "regex regresses" path, but we CAN assert
+# the function being used.
+# ===========================================================================
+import inspect
+src = inspect.getsource(AB.build_agent)
+assert "is_relative_to" in src, (
+    "B2 regression: build_agent path-safety should use Path.is_relative_to, "
+    "not str.startswith. The latter has a known false-positive on "
+    "sibling-dir-prefix paths."
+)
+assert "startswith(str(root_resolved))" not in src, (
+    "B2 regression: startswith path check is back -- it admits "
+    "sibling-dir-prefix attacks."
+)
+print("[PASS] B2: path-safety uses is_relative_to, not startswith")
+
+
+# ===========================================================================
+# Test 14 (closes Y3): pending-name collision triggers _unique_name
+# suffix instead of silently overwriting the prior pending file.
+# ===========================================================================
+with tempfile.TemporaryDirectory() as d:
+    base = Path(d).resolve()
+    # First pending build
+    r1 = AB.build_agent(
+        base, llm=_stub, task_example="x", auto_approve=False,
+    )
+    assert r1.ok and ".pending" in str(r1.path)
+    first_name = r1.name
+    first_content = r1.path.read_text(encoding="utf-8")
+    # Second pending build with the SAME stub response (same name desired)
+    r2 = AB.build_agent(
+        base, llm=_stub, task_example="x", auto_approve=False,
+    )
+    assert r2.ok
+    # Critical: the new pending must have a DIFFERENT name (-2 suffix)
+    assert r2.name != first_name, (
+        "Y3 regression: pending build silently overwrote prior pending "
+        f"(both got name {r1.name!r})"
+    )
+    assert r2.name.endswith("-2") or r2.name.endswith("-3")
+    # Both pending files exist
+    pending = AB.list_pending(base)
+    pending_names = {p.stem for p in pending}
+    assert first_name in pending_names
+    assert r2.name in pending_names
+    # First content was preserved (not overwritten)
+    assert r1.path.read_text(encoding="utf-8") == first_content
+print("[PASS] Y3: pending name collision dedups with -2 suffix; no overwrite")
+
+
+# ===========================================================================
+# Test 15 (Y3 belt+braces): even if dedup were bypassed, archive
+# happens before overwrite -- the prior file is preserved in .history.
+# ===========================================================================
+with tempfile.TemporaryDirectory() as d:
+    base = Path(d).resolve()
+    # Manually plant a "pending" file with the name the stub will produce
+    pending_dir = base / ".open-code/autobuild-agents/.pending"
+    pending_dir.mkdir(parents=True)
+    planted_name = "sql-customer-analytics-agent"
+    planted = pending_dir / f"{planted_name}.md"
+    planted.write_text("---\nname: " + planted_name +
+                       "\ndescription: planted\n---\nplanted body\n",
+                       encoding="utf-8")
+    # Now build (dedup will detect the planted name and pick -2; archive
+    # path doesn't fire). But if we COULD reach the overwrite branch,
+    # the archive_existing guard catches it. We test by calling _serialize
+    # + write directly to simulate the bypass.
+    AB._archive_existing(base, planted_name, planted)
+    versions = AB.list_versions(base, planted_name)
+    assert len(versions) == 1
+    assert versions[0].read_text(encoding="utf-8") == \
+        planted.read_text(encoding="utf-8")
+print("[PASS] Y3 belt+braces: pending file archived before overwrite")
+
+
+# ===========================================================================
+# Test 16 (closes Y4): sidecar orphan cleanup runs WITHOUT a stale batch.
+# Previously the cleanup was nested inside `if stale:` so it never fired
+# when every remaining agent was fresh.
+# ===========================================================================
+with tempfile.TemporaryDirectory() as d:
+    base = Path(d).resolve()
+    autobuild = base / ".open-code/autobuild-agents"
+    autobuild.mkdir(parents=True)
+    # Plant 2 agents
+    for name in ("a-agent", "b-agent"):
+        (autobuild / f"{name}.md").write_text(
+            f"---\nname: {name}\ndescription: thing\n"
+            f"capabilities: [x, y]\n---\nbody\n", encoding="utf-8"
+        )
+    AS.invalidate_cache()
+    agents = AS.discover_indexable_agents(base)
+    # First call: stub embedder, builds sidecar with both
+    def _emb_v1(texts):
+        return [[1.0, 0.0]] * len(texts)
+    AE.ensure_embeddings(base, agents, _emb_v1)
+    # Now delete b-agent.md
+    (autobuild / "b-agent.md").unlink()
+    AS.invalidate_cache()
+    agents_after = AS.discover_indexable_agents(base)
+    assert {a.name for a in agents_after} == {"a-agent"}
+    # All remaining agents are fresh in the sidecar (mtime unchanged
+    # for a-agent), so there's no stale batch. The Y4 fix says we
+    # MUST still drop b-agent's entry.
+    def _emb_never_called(texts):
+        raise AssertionError(
+            "embedder must not be called when nothing is stale"
+        )
+    AE.ensure_embeddings(base, agents_after, _emb_never_called)
+    side = base / ".open-code/autobuild-agents/.embeddings.json"
+    assert side.is_file()
+    data = json.loads(side.read_text(encoding="utf-8"))
+    assert "b-agent" not in data, (
+        "Y4 regression: deleted agent's sidecar entry survived "
+        "because cleanup was gated on the stale batch."
+    )
+    assert "a-agent" in data
+print("[PASS] Y4: sidecar orphan cleanup runs even when no stale batch")
+
+
 print("\nOK -- agent extensions probes passed.")

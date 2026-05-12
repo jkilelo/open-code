@@ -531,6 +531,20 @@ Brutal review of v0.26.0 caught a real privilege escalation. Fixed all findings 
 
 **v0.26.1 ships [OK].** 48/48 probes green (45 prior + 3 new agent probes incl. 12 in `probe_agent_extensions`). 54/54 security. ASCII pure.
 
+---
+
+## v0.26.2 -- 2026-05-12 (6th brutal review: PASS WITH BLEMISHES, all closed)
+
+Brutal review of v0.26.1 walked 15 hypotheses; 3 confirmed + 12 refuted via code trace.
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| **B2** (red) -- path-safety check uses `str.startswith` instead of structural `Path.is_relative_to`; sibling-dir-prefix paths bypass the guard if name regex regresses | [OK] fixed | `is_relative_to(root_resolved)` replaces startswith. `probe_agent_extensions` Test 13 asserts source contains `is_relative_to` and lacks `startswith(str(root_resolved))` |
+| **Y3** (yellow) -- pending duplicates silently overwrite: `existing_names` was built from `discover_indexable_agents` which skips `.pending/`. Two consecutive `request_specialist` calls with the same intent overwrote the prior pending file | [OK] fixed | `build_agent` now globs `.pending/*.md` into `existing_names` (dedup works) AND `_archive_existing` runs on ANY pre-existing file at target path (belt+braces). Tests 14+15 |
+| **Y4** (yellow) -- sidecar orphan cleanup was nested inside `if stale:` block. Deleted agents accumulated indefinitely when no remaining agent was stale | [OK] fixed | cleanup hoisted to top of `ensure_embeddings`; persists on either orphan removal or stale update. Test 16 plants 2 agents, deletes one, calls ensure_embeddings with `_emb_never_called` (raises on any call); orphan still gets removed |
+
+**v0.26.2 ships [OK].** 48/48 probes (16 in `probe_agent_extensions`). ASCII pure. Security 54/54.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

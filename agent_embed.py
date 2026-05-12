@@ -139,6 +139,15 @@ def ensure_embeddings(
     rank without embedding contributions.
     """
     sidecar = _load_sidecar(cwd)
+    # Y4 fix: prune sidecar entries for agents that no longer exist
+    # BEFORE checking which agents are stale. The prior placement of
+    # this loop inside `if stale:` meant deleted-agent entries grew
+    # unboundedly whenever every remaining agent was fresh.
+    current_names = {a.name for a in agents}
+    orphans_removed = False
+    for stale_key in [k for k in sidecar if k not in current_names]:
+        sidecar.pop(stale_key, None)
+        orphans_removed = True
     fresh: dict[str, Vector] = {}
     stale: list[AgentDoc] = []
     for a in agents:
@@ -149,6 +158,7 @@ def ensure_embeddings(
                 fresh[a.name] = vec  # type: ignore[assignment]
                 continue
         stale.append(a)
+    stale_updates_made = False
     if stale:
         try:
             texts = [_agent_text_for_embedding(a) for a in stale]
@@ -161,14 +171,15 @@ def ensure_embeddings(
             for a, vec in zip(stale, vectors):
                 fresh[a.name] = vec
                 sidecar[a.name] = {"mtime": a.mtime, "vector": list(vec)}
-            # Drop entries for agents that no longer exist.
-            current = {a.name for a in agents}
-            for stale_key in [k for k in sidecar if k not in current]:
-                sidecar.pop(stale_key, None)
-            _save_sidecar(cwd, sidecar)
+            stale_updates_made = True
         except Exception:
             # Fall back: return whatever's already cached.
             pass
+    # Persist if EITHER orphans were dropped OR stale entries were
+    # recomputed. Without this guard, orphan cleanup would only land
+    # on disk when a stale batch coincidentally succeeded.
+    if orphans_removed or stale_updates_made:
+        _save_sidecar(cwd, sidecar)
     return fresh
 
 
