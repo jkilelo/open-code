@@ -97,7 +97,16 @@ def load_agent_file(path: Path) -> Agent | None:
         name=name,
         description=fm.get("description", "").strip(),
         system_prompt=body.strip(),
-        allowed_tools=_parse_list(fm.get("allowed-tools", "")),
+        # Accept both hyphen ("allowed-tools") and underscore
+        # ("allowed_tools"). Hyphen is the canonical form documented
+        # since v0.4; underscore was accidentally emitted by the
+        # v0.26.0 autobuild serializer. Reading both keeps already-
+        # written autobuild files correctly restricted instead of
+        # silently un-restricting them via empty-list -> None.
+        allowed_tools=(
+            _parse_list(fm.get("allowed-tools", ""))
+            or _parse_list(fm.get("allowed_tools", ""))
+        ),
         model=(fm.get("model", "").strip() or None),
         path=path,
     )

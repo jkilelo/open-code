@@ -18,7 +18,7 @@ name: sql-customer-analytics-agent
 description: Writes precise SQL queries for customer purchase analytics with proper joins and date filtering
 domain: sql
 capabilities: [sql, analytics, customers, purchases, joins, postgres]
-allowed_tools: [read_file, list_dir]
+allowed-tools: [read_file, list_dir]
 model: null
 ---
 
@@ -157,7 +157,7 @@ print("[PASS] non-kebab-case name -> validation failure")
 # Test 6: allowed_tools filtered against allowlist
 # ===========================================================================
 escalating = GOOD_RESPONSE.replace(
-    "allowed_tools: [read_file, list_dir]",
+    "allowed-tools: [read_file, list_dir]",
     "allowed_tools: [read_file, run_shell, write_file, apply_patch]",
 )
 ok, meta, err = AB.validate_generated_agent(
@@ -256,6 +256,96 @@ with tempfile.TemporaryDirectory() as d:
     assert "validation failed" in result.error
     assert "prose" in result.raw_response
 print("[PASS] malformed LLM output -> error + raw_response preserved")
+
+
+# ===========================================================================
+# Test 11 (closes brutal-review B1): the built file's frontmatter
+# round-trips through subagents.load_agent_file with non-empty
+# allowed_tools. Before the fix, _serialize wrote `allowed_tools:`
+# (underscore) but subagents.py read `allowed-tools:` (hyphen),
+# yielding [] -> None -> unrestricted (privilege escalation).
+# ===========================================================================
+import subagents as _SA
+
+with tempfile.TemporaryDirectory() as d:
+    base = Path(d).resolve()
+    result = AB.build_agent(
+        base, llm=_stub_llm,
+        domain_hint="sql",
+        task_example="customer count",
+    )
+    assert result.ok and result.path is not None
+    loaded = _SA.load_agent_file(result.path)
+    assert loaded is not None, "subagents must load the built file"
+    assert loaded.allowed_tools, (
+        "B1 regression: subagents.load_agent_file returned empty "
+        "allowed_tools (autobuild agent would run UNRESTRICTED)"
+    )
+    # The safety allowlist must be honored
+    for t in loaded.allowed_tools:
+        assert t in ("read_file", "list_dir"), (
+            f"B1 followup: loaded allowed_tools contains {t!r} but "
+            "autobuilt agents must be limited to read-only tools"
+        )
+print("[PASS] B1 regression: built file's allowed-tools round-trips non-empty + restricted")
+
+
+# ===========================================================================
+# Test 12 (closes brutal-review Y2): when the LLM asks for escalated
+# tools (run_shell etc), the BuildResult flags tools_adjusted + tells
+# the caller what was dropped.
+# ===========================================================================
+ESCALATING_RESPONSE = GOOD_RESPONSE.replace(
+    "allowed-tools: [read_file, list_dir]",
+    "allowed-tools: [read_file, run_shell, write_file, apply_patch]",
+)
+
+
+def _llm_escalating(prompt: str) -> str:
+    return ESCALATING_RESPONSE
+
+
+with tempfile.TemporaryDirectory() as d:
+    base = Path(d).resolve()
+    result = AB.build_agent(
+        base, llm=_llm_escalating,
+        domain_hint="sql", task_example="x",
+    )
+    assert result.ok
+    assert result.tools_adjusted is True, (
+        "tools_adjusted must be True when LLM asked for forbidden tools"
+    )
+    assert set(result.dropped_tools) == {
+        "run_shell", "write_file", "apply_patch",
+    }
+    assert set(result.final_tools).issubset({"read_file", "list_dir"})
+    # Round-trip still safe
+    loaded = _SA.load_agent_file(result.path)
+    assert set(loaded.allowed_tools).issubset({"read_file", "list_dir"})
+print("[PASS] Y2: tools_adjusted flag set + dropped_tools accurate when LLM escalates")
+
+
+# ===========================================================================
+# Test 13 (B1 followup): subagents still reads back the OLD
+# underscore-form (pre-fix autobuild files left on disk by v0.26.0)
+# correctly. Back-compat shim.
+# ===========================================================================
+OLD_FORM = GOOD_RESPONSE.replace(
+    "allowed-tools: [read_file, list_dir]",
+    "allowed_tools: [read_file, list_dir]",  # legacy underscore form
+)
+with tempfile.TemporaryDirectory() as d:
+    base = Path(d).resolve()
+    p = base / ".open-code/autobuild-agents"
+    p.mkdir(parents=True)
+    (p / "old-form-agent.md").write_text(OLD_FORM, encoding="utf-8")
+    loaded = _SA.load_agent_file(p / "old-form-agent.md")
+    assert loaded is not None
+    assert loaded.allowed_tools == ["read_file", "list_dir"], (
+        f"back-compat: underscore form should be read; got "
+        f"{loaded.allowed_tools}"
+    )
+print("[PASS] B1 back-compat: subagents reads underscore form too")
 
 
 print("\nOK -- agent_builder probes passed.")

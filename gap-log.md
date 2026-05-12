@@ -514,6 +514,23 @@ Defense in depth: autobuilt agents are restricted to `read_file` + `list_dir`. E
 
 **v0.26.0 ships [OK].** 47/47 probes green (45 prior + 2 new). 54/54 security tests. ASCII guard still pure.
 
+---
+
+## v0.26.1 -- 2026-05-12 (brutal-review FAIL fixed + autobuild extensions)
+
+Brutal review of v0.26.0 caught a real privilege escalation. Fixed all findings + shipped three extensions.
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| **B1** (red) -- `_serialize` wrote `allowed_tools:` (underscore); `subagents.load_agent_file` reads `allowed-tools:` (hyphen). Empty list -> None -> autobuilt agents ran unrestricted | [OK] confirmed + fixed | `_serialize` now writes hyphen; `subagents` + `validate_generated_agent` accept both forms (back-compat for v0.26.0 files already on disk). `probe_agent_builder` Test 11 (B1 regression) + Test 13 (back-compat) |
+| **Y1** -- `raw_response_excerpt` fed architect output back into tool result (prompt-injection chain) | [OK] removed | tool result no longer includes raw response; logged to stderr for human dev only |
+| **Y2** -- silent allowlist filter; LLM-asked-for tools dropped without surface | [OK] surfaced | `BuildResult` gains `tools_adjusted`/`dropped_tools`/`final_tools`; tool result includes them + an updated `hint`. `probe_agent_builder` Test 12 |
+| **Extension 1: embeddings** (`agent_embed.py`, ~250 LOC) -- hybrid BM25 + cosine-sim rerank; per-agent `.embeddings.json` sidecar keyed by (name, mtime); graceful fallback to BM25 on embedder failure | [OK] | `probe_agent_extensions` Tests 8-12: cosine sanity, rerank pulls semantic matches up, sidecar cache, fallback on broken embedder. Opt-in via `settings.autobuild.semantic_search` |
+| **Extension 2: versioning** -- `.history/<name>/<ts>.md` archives; microsecond timestamps prevent collision; `list_versions`, `revert_to_version`; REPL `/autobuild history` + `/autobuild revert` | [OK] | `probe_agent_extensions` Tests 5-7: archive, restore + re-archive outgoing (revert is reversible), unknown-ts fails cleanly |
+| **Extension 3: approval flow** -- `auto_approve` setting (default True for day-one autonomy); when False, build routes to `.pending/`; `approve_pending` promotes + archives prior; `reject_pending` discards. REPL `/autobuild approve`/`reject`/`pending` | [OK] | `probe_agent_extensions` Tests 1-4: auto_approve routing, pending invisible to search, approve promotes + makes searchable, reject discards |
+
+**v0.26.1 ships [OK].** 48/48 probes green (45 prior + 3 new agent probes incl. 12 in `probe_agent_extensions`). 54/54 security. ASCII pure.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

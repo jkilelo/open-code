@@ -659,7 +659,10 @@ def _stream_iter_response(
     return all_parts, function_calls, usage
 
 
-def _handle_find_specialist(args: dict[str, Any], *, cwd: Path) -> dict[str, Any]:
+def _handle_find_specialist(
+    args: dict[str, Any], *, cwd: Path,
+    api_key: str = "", settings: Any = None,
+) -> dict[str, Any]:
     """Tool: BM25 search for matching specialists.
 
     Returns up to `limit` matches with descriptive fields and scores.
@@ -679,6 +682,18 @@ def _handle_find_specialist(args: dict[str, Any], *, cwd: Path) -> dict[str, Any
     except Exception as exc:
         return {"ok": False,
                 "error": f"search failed: {type(exc).__name__}: {exc}"}
+    # Optional semantic rerank. Off by default; opt in via
+    # settings.autobuild.semantic_search = true. Falls back silently
+    # to pure BM25 if the embedding call fails.
+    if results and _autobuild_semantic(settings) and api_key:
+        try:
+            import agent_embed as _embed
+            embedder = _embed.make_genai_embedder(api_key)
+            results = _embed.search_hybrid(
+                cwd, query, bm25_results=results, embedder=embedder,
+            )
+        except Exception:
+            pass  # silent fallback to BM25 ranking
     matches = [
         {
             "name": doc.name,
@@ -701,6 +716,27 @@ def _autobuild_enabled(settings: Any) -> bool:
     if not isinstance(ab, dict):
         return True
     return bool(ab.get("enabled", True))
+
+
+def _autobuild_auto_approve(settings: Any) -> bool:
+    """Honor settings.autobuild.auto_approve. Default True for full
+    day-one autonomy. False routes builds to .pending/ for user approval."""
+    raw = getattr(settings, "raw", None) or {}
+    ab = raw.get("autobuild") if isinstance(raw, dict) else None
+    if not isinstance(ab, dict):
+        return True
+    return bool(ab.get("auto_approve", True))
+
+
+def _autobuild_semantic(settings: Any) -> bool:
+    """Whether to enable embedding-based rerank on find_specialist.
+    Default False -- semantic search makes an extra LLM call per
+    search; opt-in for users who want it."""
+    raw = getattr(settings, "raw", None) or {}
+    ab = raw.get("autobuild") if isinstance(raw, dict) else None
+    if not isinstance(ab, dict):
+        return False
+    return bool(ab.get("semantic_search", False))
 
 
 def _handle_request_specialist(
@@ -762,9 +798,11 @@ def _handle_request_specialist(
             f"[autobuild] generating specialist for domain={domain or '?'} "
             f"using {architect_model}..."
         )
+    auto_approve = _autobuild_auto_approve(settings)
     result = _ab.build_agent(
         cwd, llm=_llm,
         domain_hint=domain, task_example=task_example, notes=notes,
+        auto_approve=auto_approve,
     )
     _ev_payload = _ab.build_event_payload(result)
     _ev_type = _ev_payload.pop("type")
@@ -772,15 +810,66 @@ def _handle_request_specialist(
     if not result.ok:
         if ui is not None and hasattr(ui, "warn"):
             ui.warn(f"[autobuild] failed: {result.error}")
+        # Y1 fix: do NOT feed the raw architect output back to the main
+        # model in the tool result. The raw response is attacker-
+        # controllable in principle (prompt-injection chain via the
+        # user's task_example). Log it to stderr for the human
+        # developer instead.
+        try:
+            sys.stderr.write(
+                f"[autobuild raw response (first 500 chars)]\n"
+                f"{result.raw_response[:500]}\n"
+                f"[/autobuild raw response]\n"
+            )
+        except OSError:
+            pass
         return {
             "ok": False,
             "error": result.error,
-            "raw_response_excerpt": result.raw_response[:300],
         }
+    # Y2 fix: surface the tool-allowlist filtering to the model so it
+    # doesn't expect run_shell / write_file behavior from a read-only
+    # specialist. If `tools_adjusted` is True, the meta-prompt asked
+    # for more tools than the safety allowlist permits; we tell the
+    # model explicitly so its next delegate() call uses the right
+    # mental model of the specialist's capabilities.
+    note_parts: list[str] = []
+    if result.tools_adjusted:
+        if result.dropped_tools:
+            note_parts.append(
+                f"safety: dropped {result.dropped_tools} from "
+                "allowed-tools (autobuilt agents are restricted to "
+                f"{list(_ab.DEFAULT_ALLOWED_TOOLS)})"
+            )
+        note_parts.append(
+            f"final allowed-tools: {result.final_tools}"
+        )
+    status = "saved" if auto_approve else "pending"
     if ui is not None and hasattr(ui, "info"):
         ui.info(
-            f"[autobuild] saved {result.name} "
+            f"[autobuild] {status} {result.name} "
             f"({result.domain}) at {result.path}"
+        )
+        if not auto_approve:
+            ui.info(
+                f"[autobuild] approve with `/autobuild approve "
+                f"{result.name}` (or reject with `/autobuild reject "
+                f"{result.name}`)"
+            )
+        for note in note_parts:
+            ui.info(f"[autobuild] {note}")
+    hint = (
+        f"Now call delegate(agent={result.name!r}, task=...) to "
+        "have this specialist handle the user's task. The "
+        "specialist is restricted to the tools listed in "
+        "`final_tools` -- don't ask it for things outside that scope."
+    )
+    if not auto_approve:
+        hint = (
+            f"Specialist {result.name!r} was saved to pending "
+            "awaiting user approval (settings.autobuild.auto_approve "
+            "is False). Inform the user and ask them to run "
+            f"`/autobuild approve {result.name}` before you delegate."
         )
     return {
         "ok": True,
@@ -788,10 +877,12 @@ def _handle_request_specialist(
         "domain": result.domain,
         "description": result.description,
         "path": str(result.path) if result.path else "",
-        "hint": (
-            f"Now call delegate(agent={result.name!r}, task=...) to "
-            "have this specialist handle the user's task."
-        ),
+        "status": status,
+        "tools_adjusted": result.tools_adjusted,
+        "final_tools": list(result.final_tools),
+        "dropped_tools": list(result.dropped_tools),
+        "note": "; ".join(note_parts) if note_parts else "",
+        "hint": hint,
     }
 
 
@@ -1344,6 +1435,7 @@ def run_loop(
                         # Tier 3: BM25 search across the agent library.
                         result = _handle_find_specialist(
                             args, cwd=CONFIG.cwd,
+                            api_key=api_key, settings=settings,
                         )
                     elif name == "request_specialist":
                         # Tier 3: build a new specialist on demand.

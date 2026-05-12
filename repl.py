@@ -56,6 +56,11 @@ Slash commands:
   /autobuild on              re-enable autobuild for this session
   /autobuild off             disable autobuild for this session
   /autobuild search <q>      BM25 search across the agent library
+  /autobuild approve <name>  promote a pending specialist to live (when auto_approve=false)
+  /autobuild reject <name>   discard a pending specialist
+  /autobuild pending         list specialists awaiting approval
+  /autobuild history <name>  show archived versions of a specialist
+  /autobuild revert <name>   restore the most recent archived version (or specify ts prefix)
   /mode [name]       show or set permission mode (default/acceptEdits/plan/auto/bypassPermissions)
   /plan <task>       run <task> in plan mode (read-only); save result as a plan event
   /act [task]        load most recent plan; switch to acceptEdits; execute
@@ -678,6 +683,62 @@ def run_repl(
                 elif action == "off":
                     ab_cfg["enabled"] = False
                     print("[autobuild: off]")
+                elif action == "approve":
+                    if not action_arg:
+                        print("usage: /autobuild approve <name>")
+                        continue
+                    import agent_builder as _ab
+                    ok_, msg, live = _ab.approve_pending(cwd, action_arg)
+                    print(f"[autobuild approve: {msg}]")
+                elif action == "reject":
+                    if not action_arg:
+                        print("usage: /autobuild reject <name>")
+                        continue
+                    import agent_builder as _ab
+                    ok_, msg = _ab.reject_pending(cwd, action_arg)
+                    print(f"[autobuild reject: {msg}]")
+                elif action == "pending":
+                    import agent_builder as _ab
+                    pending = _ab.list_pending(cwd)
+                    if not pending:
+                        ui.empty_listing(
+                            "(no specialists awaiting approval)",
+                            kind="pending_agents",
+                        )
+                    else:
+                        ui.table(
+                            title=f"Pending specialists ({len(pending)})",
+                            columns=["NAME", "PATH"],
+                            rows=[[p.stem, str(p)] for p in pending],
+                        )
+                elif action == "history":
+                    if not action_arg:
+                        print("usage: /autobuild history <name>")
+                        continue
+                    import agent_builder as _ab
+                    versions = _ab.list_versions(cwd, action_arg)
+                    if not versions:
+                        ui.empty_listing(
+                            f"(no archived versions for {action_arg!r})",
+                            kind="agent_history",
+                        )
+                    else:
+                        ui.table(
+                            title=f"Versions of {action_arg} "
+                                  f"({len(versions)})",
+                            columns=["TIMESTAMP", "PATH"],
+                            rows=[[v.stem, str(v)] for v in versions],
+                        )
+                elif action == "revert":
+                    if not action_arg:
+                        print("usage: /autobuild revert <name> [ts-prefix]")
+                        continue
+                    parts2 = action_arg.split(None, 1)
+                    nm = parts2[0]
+                    ts = parts2[1].strip() if len(parts2) > 1 else None
+                    import agent_builder as _ab
+                    ok_, msg = _ab.revert_to_version(cwd, nm, ts)
+                    print(f"[autobuild revert: {msg}]")
                 elif action == "search":
                     if not action_arg:
                         print("usage: /autobuild search <query>")

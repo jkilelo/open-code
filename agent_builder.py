@@ -33,9 +33,12 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+
+import shutil
+from datetime import datetime, timezone
 
 from agent_search import (
     AUTOBUILD_AGENTS_REL,
@@ -44,6 +47,137 @@ from agent_search import (
     discover_indexable_agents,
     invalidate_cache,
 )
+
+
+# Directory layout for versioning + approval:
+#   .open-code/autobuild-agents/
+#     <name>.md                  -- the live agent
+#     .history/<name>/<ts>.md    -- archived prior versions
+#     .pending/<name>.md         -- waiting for user approval (when
+#                                   autobuild.auto_approve is False)
+HISTORY_SUBDIR = ".history"
+PENDING_SUBDIR = ".pending"
+
+
+def _history_dir(cwd: Path, name: str) -> Path:
+    return cwd / AUTOBUILD_AGENTS_REL / HISTORY_SUBDIR / name
+
+
+def _pending_dir(cwd: Path) -> Path:
+    return cwd / AUTOBUILD_AGENTS_REL / PENDING_SUBDIR
+
+
+def _archive_existing(cwd: Path, name: str, current_path: Path) -> Path | None:
+    """If `current_path` exists, copy it to .history/<name>/<iso-ts>.md.
+    Returns the archive path (or None if there was nothing to archive).
+
+    Microsecond resolution in the filename prevents collision when
+    two archives happen in quick succession (e.g. a revert that
+    immediately re-archives the outgoing version).
+    """
+    if not current_path.is_file():
+        return None
+    hist = _history_dir(cwd, name)
+    hist.mkdir(parents=True, exist_ok=True)
+    # %f gives microseconds; we keep them in the filename so the
+    # alphabetic sort (newest first via reverse=True) is also
+    # chronologically correct.
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%fZ")
+    archive = hist / f"{ts}.md"
+    # Belt + braces: if a collision somehow still occurs (clock skew
+    # on a clearly-broken system), tack on an incrementing suffix.
+    n = 2
+    while archive.exists():
+        archive = hist / f"{ts}-{n}.md"
+        n += 1
+    try:
+        shutil.copy2(current_path, archive)
+        return archive
+    except OSError:
+        return None
+
+
+def list_versions(cwd: Path, name: str) -> list[Path]:
+    """Returns archived versions of `name`, newest first."""
+    hist = _history_dir(cwd, name)
+    if not hist.is_dir():
+        return []
+    return sorted(hist.glob("*.md"), key=lambda p: p.name, reverse=True)
+
+
+def revert_to_version(
+    cwd: Path, name: str, version_ts: str | None = None,
+) -> tuple[bool, str]:
+    """Restore an agent from history.
+
+    If `version_ts` is None, restores the most recent archived version.
+    Otherwise restores the version whose filename starts with
+    `version_ts` (so prefix match on "2026-05-12" works).
+
+    Returns (ok, message).
+    """
+    versions = list_versions(cwd, name)
+    if not versions:
+        return False, f"no archived versions for {name!r}"
+    if version_ts is None:
+        target = versions[0]
+    else:
+        match = [v for v in versions if v.name.startswith(version_ts)]
+        if not match:
+            return False, (
+                f"no version matching {version_ts!r}; "
+                f"have {[v.name for v in versions[:5]]}"
+            )
+        target = match[0]
+    live = cwd / AUTOBUILD_AGENTS_REL / f"{name}.md"
+    # Archive the current live version BEFORE overwriting it, so
+    # revert is itself reversible.
+    _archive_existing(cwd, name, live)
+    try:
+        shutil.copy2(target, live)
+    except OSError as exc:
+        return False, f"failed to restore: {exc}"
+    invalidate_cache(cwd)
+    return True, f"restored {name} from {target.name}"
+
+
+def list_pending(cwd: Path) -> list[Path]:
+    """Returns pending agent specs awaiting user approval."""
+    d = _pending_dir(cwd)
+    if not d.is_dir():
+        return []
+    return sorted(d.glob("*.md"))
+
+
+def approve_pending(cwd: Path, name: str) -> tuple[bool, str, Path | None]:
+    """Move a pending spec to live + archive any prior version.
+
+    Returns (ok, message, live_path).
+    """
+    pending = _pending_dir(cwd) / f"{name}.md"
+    if not pending.is_file():
+        return False, f"no pending spec named {name!r}", None
+    live = cwd / AUTOBUILD_AGENTS_REL / f"{name}.md"
+    _archive_existing(cwd, name, live)
+    try:
+        shutil.copy2(pending, live)
+        pending.unlink()
+    except OSError as exc:
+        return False, f"approve failed: {exc}", None
+    invalidate_cache(cwd)
+    return True, f"approved {name}", live
+
+
+def reject_pending(cwd: Path, name: str) -> tuple[bool, str]:
+    """Delete a pending spec without promoting it."""
+    pending = _pending_dir(cwd) / f"{name}.md"
+    if not pending.is_file():
+        return False, f"no pending spec named {name!r}"
+    try:
+        pending.unlink()
+    except OSError as exc:
+        return False, f"reject failed: {exc}"
+    return True, f"rejected {name}"
 
 
 # Tools we permit auto-built specialists to use. Conservative on
@@ -68,7 +202,7 @@ name: <kebab-case-name>
 description: <one sentence, BM25-searchable; concrete keywords>
 domain: <single lowercase word: sql | data | web | ml | infra | security | docs | testing | other>
 capabilities: [<list>, <of>, <searchable>, <keywords>]
-allowed_tools: [<subset of read_file, list_dir>]
+allowed-tools: [<subset of read_file, list_dir>]
 model: null
 ---
 
@@ -142,7 +276,7 @@ Rules you MUST follow:
   testing, other.
 - capabilities must be 3-8 specific keywords (NOT generic words like
   "general" or "tasks").
-- allowed_tools is a subset of [read_file, list_dir]. The build
+- allowed-tools is a subset of [read_file, list_dir]. The build
   process will reject anything else.
 - Expert knowledge bullets must be concrete domain rules, NOT
   motherhood-and-apple-pie statements.
@@ -174,6 +308,14 @@ class BuildResult:
     description: str = ""
     error: str = ""
     raw_response: str = ""
+    # Y2 fix: signal to the caller (and downstream to the LLM) that
+    # the LLM-proposed tool list was narrowed during validation.
+    # Without this, an autobuilt agent ostensibly granted run_shell
+    # silently runs read-only; the model would issue shell tasks and
+    # be confused by repeated tool denials.
+    tools_adjusted: bool = False
+    dropped_tools: list[str] = field(default_factory=list)
+    final_tools: list[str] = field(default_factory=list)
 
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
@@ -261,12 +403,30 @@ def validate_generated_agent(
     if len(capabilities) < 2:
         return False, {}, "capabilities must list at least 2 keywords"
 
-    allowed_tools = _parse_list_field(fm.get("allowed_tools", ""))
-    # Filter against the allowlist.
-    allowed_tools = [t for t in allowed_tools if t in DEFAULT_ALLOWED_TOOLS]
+    # Read both forms defensively: meta-prompt now says "allowed-tools"
+    # (matching subagents.py since v0.4) but an LLM trained on older
+    # versions of this codebase may still emit underscore.
+    allowed_tools_raw = (
+        fm.get("allowed-tools") or fm.get("allowed_tools") or ""
+    )
+    allowed_tools_pre_filter = _parse_list_field(allowed_tools_raw)
+    allowed_tools = [
+        t for t in allowed_tools_pre_filter if t in DEFAULT_ALLOWED_TOOLS
+    ]
+    # Y2 fix: track whether the allowlist filter dropped anything OR
+    # we defaulted to read-only. The caller surfaces this to the model
+    # so it doesn't mistakenly believe the specialist has write/shell
+    # capability.
+    tools_adjusted = (
+        set(allowed_tools) != set(allowed_tools_pre_filter)
+    )
+    dropped_tools = [
+        t for t in allowed_tools_pre_filter if t not in DEFAULT_ALLOWED_TOOLS
+    ]
     if not allowed_tools:
         # Default to read-only inspection capability.
         allowed_tools = list(DEFAULT_ALLOWED_TOOLS)
+        tools_adjusted = True
 
     # Body sanity: must contain the structural section headers.
     REQUIRED_SECTIONS = (
@@ -283,6 +443,8 @@ def validate_generated_agent(
         "name": name,
         "description": desc,
         "domain": domain,
+        "tools_adjusted": tools_adjusted,
+        "dropped_tools": dropped_tools,
         "capabilities": capabilities,
         "allowed_tools": allowed_tools,
         "body": body.strip() + "\n",
@@ -298,13 +460,16 @@ def _serialize(meta: dict[str, Any]) -> str:
     """
     caps_inline = ", ".join(meta["capabilities"])
     tools_inline = ", ".join(meta["allowed_tools"])
+    # B1 fix: emit `allowed-tools` (hyphen) -- the canonical key the
+    # subagents loader reads. The previous underscore form silently
+    # made every autobuild agent run unrestricted (privilege escalation).
     fm = (
         "---\n"
         f"name: {meta['name']}\n"
         f"description: {meta['description']}\n"
         f"domain: {meta['domain']}\n"
         f"capabilities: [{caps_inline}]\n"
-        f"allowed_tools: [{tools_inline}]\n"
+        f"allowed-tools: [{tools_inline}]\n"
         "model: null\n"
         "---\n\n"
     )
@@ -350,6 +515,7 @@ def build_agent(
     task_example: str = "",
     notes: str = "",
     dry_run: bool = False,
+    auto_approve: bool = True,
 ) -> BuildResult:
     """End-to-end: generate, validate, save, refresh index.
 
@@ -391,12 +557,51 @@ def build_agent(
             domain=meta["domain"],
             description=meta["description"],
             raw_response=raw,
+            tools_adjusted=meta.get("tools_adjusted", False),
+            dropped_tools=list(meta.get("dropped_tools", [])),
+            final_tools=list(meta.get("allowed_tools", [])),
         )
 
-    # Write to .open-code/autobuild-agents/<name>.md
-    target_dir = cwd / AUTOBUILD_AGENTS_REL
-    target_dir.mkdir(parents=True, exist_ok=True)
+    # Resolve target location. auto_approve=False routes to the
+    # .pending/ subdir; the user must run /autobuild approve <name>
+    # to promote.
+    autobuild_root = cwd / AUTOBUILD_AGENTS_REL
+    autobuild_root.mkdir(parents=True, exist_ok=True)
+    if auto_approve:
+        target_dir = autobuild_root
+    else:
+        target_dir = autobuild_root / PENDING_SUBDIR
+        target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / f"{meta['name']}.md"
+    # B1 + Path safety: re-resolve and confirm the path lives strictly
+    # inside the autobuild directory before writing. The name regex
+    # ^[a-z][a-z0-9-]*$ already prevents traversal, but a layered
+    # check here is cheap and means a future regex regression can't
+    # let `..` reach disk.
+    try:
+        resolved = target_path.resolve(strict=False)
+        root_resolved = autobuild_root.resolve(strict=False)
+        if not str(resolved).startswith(str(root_resolved)):
+            return BuildResult(
+                ok=False,
+                error=(
+                    f"refusing to write outside autobuild dir: "
+                    f"{resolved} not under {root_resolved}"
+                ),
+                raw_response=raw,
+            )
+    except OSError as exc:
+        return BuildResult(
+            ok=False, error=f"path resolution failed: {exc}",
+            raw_response=raw,
+        )
+    # Versioning: when overwriting an existing LIVE agent (auto_approve
+    # path, name collided through validator's dedup), archive the
+    # outgoing copy before writing. Validator's _unique_name suffixes
+    # collisions, so the LIVE path is fresh by name; this still
+    # protects against future edits that re-build under the same name.
+    if auto_approve and target_path.is_file():
+        _archive_existing(cwd, meta["name"], target_path)
     try:
         target_path.write_text(_serialize(meta), encoding="utf-8")
     except OSError as exc:
@@ -405,12 +610,16 @@ def build_agent(
             error=f"failed to write {target_path}: {exc}",
             raw_response=raw,
         )
-    invalidate_cache(cwd)
+    if auto_approve:
+        invalidate_cache(cwd)
     return BuildResult(
         ok=True,
         name=meta["name"],
         path=target_path,
         domain=meta["domain"],
+        tools_adjusted=meta.get("tools_adjusted", False),
+        dropped_tools=list(meta.get("dropped_tools", [])),
+        final_tools=list(meta.get("allowed_tools", [])),
         description=meta["description"],
         raw_response=raw,
     )
@@ -427,6 +636,9 @@ def build_event_payload(result: BuildResult) -> dict[str, Any]:
         "type": "agent_built" if result.ok else "agent_build_failed",
         "name": result.name,
         "path": str(result.path) if result.path else "",
+        "tools_adjusted": result.tools_adjusted,
+        "dropped_tools": list(result.dropped_tools),
+        "final_tools": list(result.final_tools),
         "domain": result.domain,
         "description": result.description,
         "error": result.error,
