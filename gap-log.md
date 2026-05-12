@@ -599,6 +599,28 @@ The class of bug (only surfaces in a real TTY) is exactly what probes can't catc
 
 **v0.27.2 ships [OK].** 48/48 probes (13 in probe_ui). ASCII pure. Security 54/54.
 
+---
+
+## v0.27.3 -- 2026-05-12 (Console captured stderr ref bypassing Live redirect)
+
+User confirmed v0.27.2's panel renders, but tool call lines + turn summary still vanish. Same bug class as v0.27.1, different code path: `Console(file=sys.stderr)` captured the stderr reference at construction; when Live replaced sys.stderr with a redirector, Console writes bypassed the redirect.
+
+Fix: use Rich's `Console(stderr=True)` flag (dynamic lookup) instead of `file=sys.stderr` (captured reference). Source-inspection regression probe added.
+
+**v0.27.3 ships [OK].** 48/48 probes (14 in probe_ui). ASCII pure. Security 54/54.
+
+---
+
+## v0.28.0 -- 2026-05-12 (suppress unrelated pydantic-plugin noise on startup)
+
+User asked why every open-code startup emitted 3 lines of `logfire-plugin` / `opentelemetry.sdk._logs.LogData` noise to stderr. Root cause: dependency-version mismatch in their global site-packages (logfire registers a pydantic plugin that depends on a specific opentelemetry-sdk version). Not open-code's bug, but the noise was unprofessional.
+
+Fix: 17-line preamble at the top of `open_code.py` BEFORE any imports. Sets `PYDANTIC_DISABLE_PLUGINS=1` (env var Pydantic honors) + adds `warnings.filterwarnings` for `logfire-plugin` and `Pydantic plugin` patterns. Uses `os.environ.setdefault` so a user who wants plugins can opt in via `PYDANTIC_DISABLE_PLUGINS=0`.
+
+Verified: `python open_code.py --list-styles` now emits clean output with no stderr preamble.
+
+**v0.28.0 ships [OK].** 48/48 probes. ASCII pure. Security 54/54.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

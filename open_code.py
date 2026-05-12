@@ -36,9 +36,29 @@ Env:
 """
 from __future__ import annotations
 
+# Quiet third-party plugin-discovery noise before importing anything
+# that triggers it. open-code itself doesn't use Pydantic plugins;
+# the warnings come from other packages registered in the user's
+# global site-packages (typically `logfire-plugin` which depends on
+# a specific opentelemetry-sdk version). Must run BEFORE any import
+# that loads google-genai / pydantic (which scans for plugins).
+import os
+os.environ.setdefault("PYDANTIC_DISABLE_PLUGINS", "1")
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message=r".*logfire-plugin.*",
+    category=UserWarning,
+)
+# Also catch the generic pydantic-plugin import-failure message.
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Pydantic plugin.*",
+    category=UserWarning,
+)
+
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
