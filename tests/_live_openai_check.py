@@ -39,6 +39,9 @@ res = llm.ask(
     messages=[Message(role="user", parts=[Part.make_text(
         "Say exactly: 'hello from openai adapter' and nothing else."
     )])],
+    # gpt-5-mini eats reasoning tokens by default -- minimal effort
+    # keeps the test deterministic at a small budget. See README gotcha.
+    thinking_effort="minimal",
     max_output_tokens=256,
 )
 out = res.message.text()
@@ -57,6 +60,7 @@ for chunk in llm.ask_stream(
     messages=[Message(role="user", parts=[Part.make_text(
         "Count from 1 to 5, one number per line, nothing else."
     )])],
+    thinking_effort="minimal",
     max_output_tokens=256,
 ):
     chunks_seen += 1

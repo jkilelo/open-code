@@ -43,6 +43,8 @@ res = llm.ask(
     messages=[Message(role="user", parts=[Part.make_text(
         "Say exactly: 'hello from openai_chat adapter' and nothing else."
     )])],
+    # gpt-5-mini reasoning eats budget by default -- minimal keeps it small.
+    thinking_effort="minimal",
     max_output_tokens=256,
 )
 out = res.message.text()
@@ -61,6 +63,7 @@ for chunk in llm.ask_stream(
     messages=[Message(role="user", parts=[Part.make_text(
         "Count from 1 to 5, one number per line, nothing else."
     )])],
+    thinking_effort="minimal",
     max_output_tokens=256,
 ):
     chunks_seen += 1
