@@ -216,6 +216,13 @@ def build_parser() -> argparse.ArgumentParser:
              "env var is set.",
     )
     parser.add_argument(
+        "--no-panel", action="store_true",
+        help="Disable the sticky bottom status panel (rich+TTY only). "
+             "Also disabled by OPEN_CODE_NO_PANEL=1. Use this if you "
+             "prefer the v0.27.0 line-by-line output instead of the "
+             "live footer.",
+    )
+    parser.add_argument(
         "--print", "-p", action="store_true", dest="print_json",
         help="Non-interactive JSON-lines output mode (Tier 2 #20). "
              "Emits one JSON object per line to stdout: session_start, "
@@ -278,6 +285,11 @@ def main(argv: list[str] | None = None) -> int:
         settings.effort = args.effort
     if args.auto_checkpoint:
         settings.auto_checkpoint = True
+    if args.no_panel:
+        # Propagate via env so the UI's live_panel auto-detect sees it.
+        # We don't pass through the UI constructor (which is already
+        # built) -- the env check happens at panel-create time.
+        os.environ["OPEN_CODE_NO_PANEL"] = "1"
     if args.no_autobuild:
         # Bypass the settings.autobuild.enabled default by stashing a
         # disable flag into raw. _autobuild_enabled in open_code.py

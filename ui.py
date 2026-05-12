@@ -201,6 +201,39 @@ class UI:
         else:
             self._stream.write(f"{msg}\n")
 
+    def live_panel(
+        self,
+        *,
+        model: str,
+        max_iters: int,
+        session_id: str = "",
+    ) -> "LiveStatusPanel | NoOpPanel":
+        """Build a sticky bottom status panel for a turn.
+
+        In rich+TTY mode: returns an active LiveStatusPanel that
+        renders a fixed bottom area showing iter/model/tokens/current
+        action. Tool calls + model text scroll naturally above it.
+        In plain/json/non-TTY mode: returns a NoOpPanel whose methods
+        are no-ops, so callers don't need to branch on mode.
+
+        Toggle off via `OPEN_CODE_NO_PANEL=1`.
+        """
+        if (self.mode != MODE_RICH or self.quiet
+                or os.environ.get("OPEN_CODE_NO_PANEL")):
+            return NoOpPanel()
+        try:
+            console = self._rich_console()
+            if not console.is_terminal:
+                return NoOpPanel()
+            return LiveStatusPanel(
+                console=console,
+                model=model,
+                max_iters=max_iters,
+                session_id=session_id,
+            )
+        except Exception:
+            return NoOpPanel()
+
     def thinking(self, message: str = "thinking..."):
         """Context manager: live spinner during a long operation.
 
@@ -635,3 +668,188 @@ class UI:
                 str(x).ljust(w) for x, w in zip(row, widths)
             )
             self._stream.write(line + "\n")
+
+
+# ---------------------------------------------------------------------------
+# Sticky bottom status panel (Claude-Code / vim-style live footer)
+# ---------------------------------------------------------------------------
+
+
+class NoOpPanel:
+    """Drop-in for LiveStatusPanel when not in rich+TTY mode.
+
+    All methods are no-ops so callers can use the same try/finally
+    pattern regardless of mode.
+    """
+
+    def start(self) -> "NoOpPanel":
+        return self
+
+    def stop(self) -> None:
+        pass
+
+    def update(self, **kwargs: Any) -> None:
+        pass
+
+    def set_action(self, action: str) -> None:
+        pass
+
+    def __enter__(self) -> "NoOpPanel":
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self.stop()
+
+
+class LiveStatusPanel:
+    """Sticky bottom panel that auto-refreshes during a turn.
+
+    Pattern (borrowed from Claude Code / vim status lines / tmux):
+      +----------------------------------------------------------+
+      | [iter 2/25]  gemini-3.1-flash-lite-preview               |
+      | 3.1K in  |  16 out  |  2.1s  |  1 tool  |  0 err         |
+      | now: reading README.md                                    |
+      +----------------------------------------------------------+
+
+    Tool calls and model text scroll naturally above the panel
+    (Rich's Live takes over the bottom area and scrolls regular
+    console.print output upward).
+
+    Auto-refreshes 4x/sec so the elapsed wall time + spinner stay
+    fresh. The "now" line is updated explicitly by run_loop.
+    """
+
+    def __init__(
+        self,
+        *,
+        console: Any,
+        model: str,
+        max_iters: int,
+        session_id: str = "",
+    ) -> None:
+        self._console = console
+        self.model = model
+        self.max_iters = max_iters
+        self.session_id = session_id
+        # Mutable state -- updated as the turn progresses
+        self.iter = 0
+        self.in_tok = 0
+        self.out_tok = 0
+        self.tool_calls = 0
+        self.tool_errors = 0
+        self.action = "starting..."
+        self._live: Any = None
+        self._start_time = 0.0
+
+    def _render(self) -> Any:
+        import time as _time
+        from rich.panel import Panel
+        from rich.spinner import Spinner
+        from rich.table import Table
+        from rich.text import Text
+
+        elapsed = (
+            _time.perf_counter() - self._start_time
+            if self._start_time else 0.0
+        )
+
+        # First row: iter + model
+        head = Text()
+        head.append(f"[iter {self.iter}/{self.max_iters}] ",
+                    style="bold cyan")
+        head.append(self.model, style="dim")
+        if self.session_id:
+            head.append("  |  session ", style="dim")
+            head.append(self.session_id[:8], style="dim")
+
+        # Second row: counters
+        counters = Text()
+        counters.append(_fmt_tokens(self.in_tok), style="green")
+        counters.append(" in  ", style="dim")
+        counters.append(_fmt_tokens(self.out_tok), style="green")
+        counters.append(" out  ", style="dim")
+        counters.append(f"{elapsed:.1f}s", style="yellow")
+        counters.append("  ", style="")
+        counters.append(f"{self.tool_calls} tools", style="dim")
+        if self.tool_errors:
+            counters.append(
+                f"  |  {self.tool_errors} err",
+                style="red bold",
+            )
+
+        # Third row: current action with a spinner
+        now_line = Table.grid(padding=0)
+        now_line.add_column(no_wrap=True)
+        now_line.add_column(no_wrap=False)
+        spin = Spinner("dots", text="", style="cyan")
+        action_text = Text("now: ", style="dim")
+        action_text.append(self.action, style="bold")
+        now_line.add_row(spin, action_text)
+
+        # Assemble three rows in a Panel
+        body = Table.grid(padding=0)
+        body.add_column()
+        body.add_row(head)
+        body.add_row(counters)
+        body.add_row(now_line)
+        return Panel(
+            body, border_style="cyan", expand=True,
+            padding=(0, 1),
+            title="[bold]open-code[/bold]",
+            title_align="left",
+        )
+
+    def start(self) -> "LiveStatusPanel":
+        import time as _time
+        from rich.live import Live
+        self._start_time = _time.perf_counter()
+        # transient=True so the panel disappears cleanly on .stop().
+        # The final summary is printed separately by ui.turn_summary.
+        self._live = Live(
+            self._render(),
+            console=self._console,
+            refresh_per_second=4,
+            transient=True,
+            redirect_stdout=False,
+            redirect_stderr=False,
+        )
+        self._live.start()
+        return self
+
+    def stop(self) -> None:
+        if self._live is not None:
+            try:
+                self._live.stop()
+            except Exception:
+                pass
+            self._live = None
+
+    def update(self, **kwargs: Any) -> None:
+        """Update one or more counter fields and refresh the panel."""
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
+        if self._live is not None:
+            try:
+                self._live.update(self._render())
+            except Exception:
+                pass
+
+    def set_action(self, action: str) -> None:
+        self.action = action[:80] if len(action) > 80 else action
+        self.update()
+
+    def __enter__(self) -> "LiveStatusPanel":
+        return self.start()
+
+    def __exit__(self, *exc: Any) -> None:
+        self.stop()
+
+
+def _fmt_tokens(n: int) -> str:
+    """Compact human-readable token count: 12345 -> '12.3K'."""
+    if n < 1000:
+        return str(n)
+    if n < 1000000:
+        return f"{n / 1000:.1f}K"
+    return f"{n / 1000000:.1f}M"

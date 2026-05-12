@@ -1140,6 +1140,19 @@ def run_loop(
 
     exit_code = 0
     iteration = 0
+    # Sticky bottom status panel (rich+TTY only; no-op elsewhere).
+    # Lives for the whole turn; tool calls + model text scroll
+    # naturally above it. Cleared at turn-end; replaced by
+    # ui.turn_summary's single-line summary.
+    panel = ui.live_panel(
+        model=current_model,
+        max_iters=max_iterations,
+        session_id=session.id if session is not None else "",
+    )
+    try:
+        panel.start()
+    except Exception:
+        pass
     try:
         while True:
             iteration += 1
@@ -1150,6 +1163,14 @@ def run_loop(
                 exit_code = 5
                 break
             metrics["iterations"] = iteration
+            panel.update(
+                iter=iteration,
+                in_tok=metrics["total_input_tokens"],
+                out_tok=metrics["total_output_tokens"],
+                tool_calls=metrics["tool_calls"],
+                tool_errors=metrics["tool_errors"],
+            )
+            panel.set_action(f"thinking with {current_model}...")
             if verbose:
                 ui.model_call_start(
                     iteration=iteration, model=current_model,
@@ -1540,6 +1561,13 @@ def run_loop(
                 continue
             break
     finally:
+        # Stop the sticky bottom panel BEFORE writing summary lines,
+        # so the panel doesn't repaint over the summary. No-op when
+        # the panel was never started (plain/json/non-TTY).
+        try:
+            panel.stop()
+        except Exception:
+            pass
         metrics["wall_seconds"] = time.perf_counter() - t_start
         # Turn-end snapshot (Tier 2 #12 -- atomic-commit per turn).
         # Runs even on KeyboardInterrupt / exceptions so the user can

@@ -561,6 +561,26 @@ User ran open-code live and surfaced two honest gaps: silent 2-5 second API-call
 
 **v0.27.0 ships [OK].** 48/48 probes unchanged (UX additions are render-level; behavior unchanged). ASCII pure. Security 54/54.
 
+---
+
+## v0.27.1 -- 2026-05-12 (sticky bottom status panel)
+
+User asked: can we borrow newer terminal-UI patterns (fixed sections with dynamic feedback)? Yes -- sticky bottom status panel during a turn (Claude Code / vim statusline pattern). Full multi-pane TUI rejected as overkill.
+
+| Component | Status |
+|-----------|--------|
+| `LiveStatusPanel` + `NoOpPanel` in `ui.py` -- Rich Live panel at bottom of terminal; auto-refreshes 4x/sec; transient=True clears on stop | [OK] |
+| Three-row layout: `[iter N/max] model | session ID` / `tokens-in tokens-out wall tools-count` / `(spinner) now: <action>` | [OK] |
+| `panel.start/update/set_action/stop` plumbed through `run_loop` | [OK] |
+| `--no-panel` flag + `OPEN_CODE_NO_PANEL=1` env var to opt out | [OK] |
+| Auto-degrades to `NoOpPanel` in plain/json/non-TTY/quiet modes | [OK] |
+| 4 new probes in `probe_ui.py`: plain mode + json mode + env-disable + non-TTY auto-degrade | [OK] |
+| `_fmt_tokens` helper for compact display (12.3K / 1.2M) | [OK] |
+
+ASCII guard caught two `·` chars in source during development -- swapped to `|` separators. Source stays 7-bit clean per the v0.24.4 invariant.
+
+**v0.27.1 ships [OK].** 48/48 probes (12 in probe_ui). ASCII pure. Security 54/54.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

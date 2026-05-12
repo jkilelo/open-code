@@ -201,4 +201,63 @@ assert event == {"type": "listing_empty", "kind": "sessions",
 print("[PASS] empty_listing: visible in plain mode AND json mode (Y2 fix)")
 
 
+# ===========================================================================
+# Test 8: LiveStatusPanel - construction + no-op fallback
+# ===========================================================================
+
+# plain mode -> NoOpPanel
+u = UI_MOD.UI(mode="plain")
+p = u.live_panel(model="x", max_iters=10)
+assert isinstance(p, UI_MOD.NoOpPanel), f"plain mode must return NoOpPanel; got {type(p)}"
+p.start()
+p.update(iter=1, in_tok=100)
+p.set_action("doing thing")
+p.stop()
+# Context-manager form
+with u.live_panel(model="x", max_iters=10) as p2:
+    p2.update(iter=2)
+print("[PASS] LiveStatusPanel: plain mode returns NoOpPanel; ctx-mgr works")
+
+
+# json mode -> NoOpPanel
+u = UI_MOD.UI(mode="json")
+p = u.live_panel(model="x", max_iters=10)
+assert isinstance(p, UI_MOD.NoOpPanel)
+print("[PASS] LiveStatusPanel: json mode returns NoOpPanel")
+
+
+# rich mode but env disable -> NoOpPanel
+os.environ["OPEN_CODE_NO_PANEL"] = "1"
+try:
+    u = UI_MOD.UI(mode="rich")
+    p = u.live_panel(model="x", max_iters=10)
+    assert isinstance(p, UI_MOD.NoOpPanel), (
+        "OPEN_CODE_NO_PANEL=1 must force NoOpPanel even in rich mode"
+    )
+finally:
+    os.environ.pop("OPEN_CODE_NO_PANEL", None)
+print("[PASS] LiveStatusPanel: OPEN_CODE_NO_PANEL=1 forces NoOpPanel")
+
+
+# rich mode + non-TTY console -> NoOpPanel (auto-detected via is_terminal)
+u = UI_MOD.UI(mode="rich")
+p = u.live_panel(model="x", max_iters=10)
+# In a typical test runner, stderr is NOT a TTY, so the panel
+# detects this and returns NoOpPanel. We can't reliably force a TTY
+# without a pseudo-terminal harness, so this is the assertion.
+assert isinstance(p, UI_MOD.NoOpPanel), (
+    f"non-TTY stderr should yield NoOpPanel; got {type(p)}"
+)
+print("[PASS] LiveStatusPanel: non-TTY auto-degrades to NoOpPanel")
+
+
+# token formatter
+assert UI_MOD._fmt_tokens(0) == "0"
+assert UI_MOD._fmt_tokens(999) == "999"
+assert UI_MOD._fmt_tokens(1000) == "1.0K"
+assert UI_MOD._fmt_tokens(12345) == "12.3K"
+assert UI_MOD._fmt_tokens(1234567) == "1.2M"
+print("[PASS] _fmt_tokens: 0/999/1.0K/12.3K/1.2M")
+
+
 print("\nOK -- ui probes passed.")
