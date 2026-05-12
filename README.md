@@ -377,6 +377,35 @@ arg values), `Tool(/regex/)` (regex search). Evaluation order is
 `deny > always_allow > ask > allow > default-allow`. `always_allow`
 is what the REPL's `[always]` prompt option writes.
 
+## PowerShell on Windows (v0.33+)
+
+By default `run_shell` routes through `cmd.exe` on Windows.
+PowerShell-savvy users get native semantics by enabling pwsh
+explicitly:
+
+```bash
+# One-off
+python open_code.py --powershell "task"
+
+# Or persistent via env var
+$env:OPEN_CODE_USE_POWERSHELL = "1"
+python open_code.py "task"
+
+# Or via settings
+{"use_powershell": true}
+```
+
+The adapter prefers `pwsh` (PowerShell 7+, cross-platform) over the
+legacy `powershell.exe` v5. Falls back to cmd if neither is on PATH.
+PowerShell invocations run with `-NoProfile -NonInteractive` so
+user-profile customizations don't leak in and credential prompts
+can't hang the agent loop. No effect on POSIX -- `/bin/sh` already
+handles those shells' native syntax.
+
+Live-verified: `tests/_live_pwsh_check.py` -- runs `Write-Output`
++ `Get-Date -Format` (PowerShell-only syntax) through the tool,
+plus a negative test that the same command fails under cmd.
+
 ## LSP (Language Server Protocol) integration (v0.32+)
 
 Configure language servers under `settings.lsp` and the agent gets

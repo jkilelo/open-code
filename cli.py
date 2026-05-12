@@ -122,6 +122,13 @@ def build_parser() -> argparse.ArgumentParser:
              "return ok=False this session.",
     )
     parser.add_argument(
+        "--powershell",
+        action="store_true",
+        help="(Windows) Route run_shell through PowerShell (pwsh "
+             "preferred, powershell.exe fallback) instead of cmd. "
+             "Equivalent to OPEN_CODE_USE_POWERSHELL=1.",
+    )
+    parser.add_argument(
         "--trust-hooks",
         action="store_true",
         help="Allow this project's .open-code/hooks/ to run for this "
@@ -263,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     CONFIG.cwd = cwd
     CONFIG.allow_outside_cwd = args.allow_outside_cwd
     CONFIG.allow_dangerous = args.allow_dangerous
+    CONFIG.use_powershell = bool(getattr(args, "powershell", False))  # type: ignore[attr-defined]
     # Tier 2 #14: status-line toggle (off by default)
     CONFIG.statusline_on = args.statusline  # type: ignore[attr-defined]
 

@@ -9,6 +9,7 @@ Plus the v0.2 security guards:
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -38,6 +39,10 @@ class Config:
     # instead of human-readable text. Set by cli.main when --print is
     # passed; read by open_code._emit_json in run_loop.
     print_json: bool = False
+    # v0.33.0 -- when True, run_shell routes through pwsh (PowerShell
+    # 7+) on Windows instead of cmd. Also settable via env
+    # OPEN_CODE_USE_POWERSHELL=1 or CLI flag --powershell.
+    use_powershell: bool = False
 
 
 CONFIG = Config()
@@ -243,8 +248,42 @@ def tool_list_dir(path: str = ".") -> dict[str, Any]:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+def _powershell_executable() -> str | None:
+    """Return the PowerShell exe to use, or None if not on PATH.
+    Prefer pwsh (PowerShell 7+, cross-platform); fall back to
+    powershell.exe (Windows-bundled, older v5). Skip Linux/Mac if
+    pwsh isn't installed -- run_shell on POSIX defaults to /bin/sh."""
+    import shutil as _shutil
+    for name in ("pwsh", "pwsh.exe", "powershell.exe"):
+        p = _shutil.which(name)
+        if p:
+            return p
+    return None
+
+
+def _use_powershell() -> str | None:
+    """Resolve whether to route run_shell through PowerShell. Returns
+    the exe path or None. Opt-in via:
+      OPEN_CODE_USE_POWERSHELL=1 in the env, OR
+      CONFIG.use_powershell flag (settable via settings.json/CLI)
+    """
+    flag = os.environ.get("OPEN_CODE_USE_POWERSHELL", "").strip()
+    if flag and flag.lower() not in ("0", "false", "no", "off", ""):
+        return _powershell_executable()
+    if getattr(CONFIG, "use_powershell", False):
+        return _powershell_executable()
+    return None
+
+
 def tool_run_shell(command: str, timeout: int = DEFAULT_TIMEOUT_PER_SHELL) -> dict[str, Any]:
-    """Run a shell command. Refuses obviously-destructive commands."""
+    """Run a shell command. Refuses obviously-destructive commands.
+
+    On Windows, opt into PowerShell via `OPEN_CODE_USE_POWERSHELL=1`
+    or `settings.use_powershell=true`. This gives the agent native
+    Windows semantics (`$env:VAR`, `Get-ChildItem`, etc.) instead of
+    cmd's quirky world. PowerShell 7 (`pwsh`) is preferred over
+    legacy `powershell.exe`.
+    """
     if not CONFIG.allow_dangerous:
         hit = _dangerous_match(command)
         if hit:
@@ -255,16 +294,32 @@ def tool_run_shell(command: str, timeout: int = DEFAULT_TIMEOUT_PER_SHELL) -> di
                     "Re-run open-code with --allow-dangerous if this is intended."
                 ),
             }
+    ps_exe = _use_powershell()
     try:
-        proc = subprocess.run(  # noqa: S602 -- intentional shell=True
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            encoding="utf-8",
-            errors="replace",
-        )
+        if ps_exe is not None:
+            # Route through PowerShell. `-NoProfile` skips loading the
+            # user's profile (faster + reproducible). `-Command` takes
+            # the full command string. `-NonInteractive` prevents the
+            # shell from prompting on credential / pause built-ins.
+            proc = subprocess.run(
+                [ps_exe, "-NoProfile", "-NonInteractive", "-Command", command],
+                shell=False,  # we have an argv -- no shell needed
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                encoding="utf-8",
+                errors="replace",
+            )
+        else:
+            proc = subprocess.run(  # noqa: S602 -- intentional shell=True
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                encoding="utf-8",
+                errors="replace",
+            )
         stdout = proc.stdout or ""
         stderr = proc.stderr or ""
         if len(stdout) > MAX_SHELL_OUTPUT:
