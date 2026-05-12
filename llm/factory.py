@@ -13,8 +13,8 @@ from .protocol import LLMClient
 DEFAULT_MODELS: dict[str, str] = {
     "gemini": "gemini-3.1-flash-lite",
     "anthropic": "claude-haiku-4-5",
-    "openai": "gpt-5.5-mini",
-    "openai_chat": "gpt-5.5-mini",
+    "openai": "gpt-5-mini",          # gpt-5.5-mini not yet GA on standard tier
+    "openai_chat": "gpt-5-mini",
     "ollama": "llama3.2",
 }
 

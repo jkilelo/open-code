@@ -28,11 +28,14 @@ _DEFAULT_MAX_TOKENS = 4096
 _THINKING_MIN_MAX_TOKENS = 16384
 
 
-# Adaptive-thinking models (per docs.claude.com 2026-05-12): use
-# thinking={"type":"adaptive"} -- they self-budget. Older models
-# (Sonnet 3.7, Sonnet 4.5, Opus 4.5) want type=enabled + budget.
+# Adaptive-thinking models: use thinking={"type":"adaptive"} -- they
+# self-budget. Empirically (verified live 2026-05-12): adaptive is
+# Opus/Sonnet 4.6+ only; Haiku 4.5 rejects adaptive with
+# 'adaptive thinking is not supported on this model'. Older models
+# (Opus 4.5, Sonnet 4.5, Sonnet 3.7) use type=enabled + budget. Haiku
+# 4.5 falls through to enabled mode too.
 _ADAPTIVE_THINKING_MODELS = (
-    "opus-4-7", "opus-4-6", "sonnet-4-6", "haiku-4-5",
+    "opus-4-7", "opus-4-6", "sonnet-4-6",
 )
 
 
