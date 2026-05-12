@@ -793,17 +793,24 @@ def _handle_request_specialist(
                 text = ""
         return text or ""
 
-    if ui is not None and hasattr(ui, "info"):
-        ui.info(
-            f"[autobuild] generating specialist for domain={domain or '?'} "
-            f"using {architect_model}..."
-        )
+    if ui is not None and hasattr(ui, "autobuild_start"):
+        ui.autobuild_start(domain=domain, task=task_example)
     auto_approve = _autobuild_auto_approve(settings)
-    result = _ab.build_agent(
-        cwd, llm=_llm,
-        domain_hint=domain, task_example=task_example, notes=notes,
-        auto_approve=auto_approve,
-    )
+    # Wrap the meta-prompt LLM call in a spinner so the user sees
+    # the 2-5 second architect-call latency.
+    if ui is not None and hasattr(ui, "thinking"):
+        with ui.thinking(f"autobuild: {architect_model} authoring..."):
+            result = _ab.build_agent(
+                cwd, llm=_llm,
+                domain_hint=domain, task_example=task_example, notes=notes,
+                auto_approve=auto_approve,
+            )
+    else:
+        result = _ab.build_agent(
+            cwd, llm=_llm,
+            domain_hint=domain, task_example=task_example, notes=notes,
+            auto_approve=auto_approve,
+        )
     _ev_payload = _ab.build_event_payload(result)
     _ev_type = _ev_payload.pop("type")
     _emit_json(_ev_type, **_ev_payload)
@@ -845,19 +852,22 @@ def _handle_request_specialist(
             f"final allowed-tools: {result.final_tools}"
         )
     status = "saved" if auto_approve else "pending"
-    if ui is not None and hasattr(ui, "info"):
-        ui.info(
-            f"[autobuild] {status} {result.name} "
-            f"({result.domain}) at {result.path}"
-        )
-        if not auto_approve:
+    if ui is not None:
+        if hasattr(ui, "autobuild_done"):
+            ui.autobuild_done(
+                name=result.name,
+                path=str(result.path) if result.path else "(pending)",
+                tools=list(result.final_tools),
+            )
+        if not auto_approve and hasattr(ui, "info"):
             ui.info(
-                f"[autobuild] approve with `/autobuild approve "
+                f"  + autobuild: approve with `/autobuild approve "
                 f"{result.name}` (or reject with `/autobuild reject "
                 f"{result.name}`)"
             )
-        for note in note_parts:
-            ui.info(f"[autobuild] {note}")
+        if hasattr(ui, "info"):
+            for note in note_parts:
+                ui.info(f"  + autobuild: {note}")
     hint = (
         f"Now call delegate(agent={result.name!r}, task=...) to "
         "have this specialist handle the user's task. The "
@@ -1141,18 +1151,31 @@ def run_loop(
                 break
             metrics["iterations"] = iteration
             if verbose:
-                print(f"[iter {iteration}] calling {current_model}...", file=sys.stderr)
+                ui.model_call_start(
+                    iteration=iteration, model=current_model,
+                )
 
             try:
+                # Wrap the API call in a Rich spinner (no-op outside
+                # rich mode) so the user sees activity during the
+                # 2-5 second model latency.
                 if stream:
-                    all_parts, function_calls, usage = _stream_iter_response(
-                        client, model=current_model, history=history, config=config, verbose=verbose
-                    )
+                    with ui.thinking(
+                        f"iter {iteration}: {current_model}..."
+                    ):
+                        all_parts, function_calls, usage = _stream_iter_response(
+                            client, model=current_model, history=history,
+                            config=config, verbose=verbose,
+                        )
                     model_content = types.Content(role="model", parts=all_parts)
                 else:
-                    response = client.models.generate_content(
-                        model=current_model, contents=history, config=config
-                    )
+                    with ui.thinking(
+                        f"iter {iteration}: {current_model}..."
+                    ):
+                        response = client.models.generate_content(
+                            model=current_model, contents=history,
+                            config=config,
+                        )
                     usage = getattr(response, "usage_metadata", None)
                     if not response.candidates:
                         sys.stderr.write("open-code: model returned no candidates\n")

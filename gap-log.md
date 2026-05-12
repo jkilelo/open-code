@@ -545,6 +545,22 @@ Brutal review of v0.26.1 walked 15 hypotheses; 3 confirmed + 12 refuted via code
 
 **v0.26.2 ships [OK].** 48/48 probes (16 in `probe_agent_extensions`). ASCII pure. Security 54/54.
 
+---
+
+## v0.27.0 -- 2026-05-12 (UX feedback + day-1 docs)
+
+User ran open-code live and surfaced two honest gaps: silent 2-5 second API-call windows + no "from day 1" docs with runnable examples. Closed both.
+
+| Item | Status |
+|------|--------|
+| Rich spinner during model calls (`ui.thinking(message)` context manager wrapping every `generate_content` / `_stream_iter_response` call); no-op in plain/json modes | [OK] |
+| Autobuild progress (`ui.autobuild_start(domain, task)` + spinner during meta-prompt + `ui.autobuild_done(name, path, tools)` on success) | [OK] |
+| Always-on turn summary line: `[iters=3 in=10791t out=52t wall=5.22s tools=2 errs=1]` (not gated on `--show-metrics`) | [OK] |
+| Session pointer at start of one-shot runs: `session: <uuid>... (resume with --resume-id <uuid>)` | [OK] |
+| NEW `LEARN.md` (~720 lines): progressive tutorial (sections 1-5) + 10 standalone copy-paste-runnable scenarios (section 6) + troubleshooting (section 7) + reference (section 8); README points to it | [OK] |
+
+**v0.27.0 ships [OK].** 48/48 probes unchanged (UX additions are render-level; behavior unchanged). ASCII pure. Security 54/54.
+
 ## Remaining [WARN] (carried to v0.15+)
 
 - Skills YAML edges (quoted strings, dash-lists, block scalars)

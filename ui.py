@@ -201,6 +201,133 @@ class UI:
         else:
             self._stream.write(f"{msg}\n")
 
+    def thinking(self, message: str = "thinking..."):
+        """Context manager: live spinner during a long operation.
+
+        Use around any API call or background task that takes >500ms.
+        In rich mode + TTY this shows a Rich spinner that auto-clears
+        when the block exits. In plain or json mode this is a no-op
+        context manager so callers don't have to branch on mode.
+
+        Example:
+            with ui.thinking("calling gemini..."):
+                response = client.models.generate_content(...)
+        """
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _nullctx():
+            yield
+
+        if self.mode != MODE_RICH:
+            return _nullctx()
+        try:
+            c = self._rich_console()
+            # status() returns a context manager; just pass it back.
+            return c.status(f"[dim]{message}[/dim]", spinner="dots")
+        except Exception:
+            return _nullctx()
+
+    def model_call_start(self, *, iteration: int, model: str) -> None:
+        """Announce that a model call is about to fire.
+
+        In rich mode: nothing printed (the thinking() spinner covers it).
+        In plain mode: a single line that survives in logs.
+        In json mode: silent (callers emit JSON envelopes separately).
+        """
+        if self.quiet or self.mode == MODE_JSON:
+            return
+        if self.mode == MODE_PLAIN:
+            self._stream.write(
+                f"[iter {iteration}] calling {model}...\n"
+            )
+        # rich mode intentionally silent here -- the spinner is enough.
+
+    def autobuild_start(self, *, domain: str, task: str) -> None:
+        """Tier 3 autobuild start notification."""
+        if self.quiet or self.mode == MODE_JSON:
+            return
+        snip = task[:60] + ("..." if len(task) > 60 else "")
+        if self.mode == MODE_RICH:
+            c = self._rich_console()
+            c.print(
+                f"  [yellow]+[/yellow] [bold]autobuild[/bold] "
+                f"[dim]building specialist for [/dim]"
+                f"[cyan]{domain or '?'}[/cyan]"
+                f" [dim]({snip})[/dim]"
+            )
+        else:
+            self._stream.write(
+                f"  + autobuild: building specialist for {domain or '?'} "
+                f"({snip})\n"
+            )
+
+    def autobuild_done(self, *, name: str, path: str,
+                       tools: list[str]) -> None:
+        if self.quiet or self.mode == MODE_JSON:
+            return
+        tools_str = ", ".join(tools) if tools else "(none)"
+        if self.mode == MODE_RICH:
+            c = self._rich_console()
+            c.print(
+                f"  [green]+[/green] [bold]autobuild[/bold] "
+                f"[dim]saved[/dim] [cyan]{name}[/cyan] "
+                f"[dim]-> {path}[/dim]\n"
+                f"    [dim]tools:[/dim] {tools_str}"
+            )
+        else:
+            self._stream.write(
+                f"  + autobuild: saved {name} -> {path}\n"
+                f"    tools: {tools_str}\n"
+            )
+
+    def turn_summary(self, *, iters: int, in_tok: int, out_tok: int,
+                     wall: float, tool_calls: int = 0,
+                     tool_errors: int = 0) -> None:
+        """Concise one-line summary printed at end of a turn.
+
+        Shown for every run (not gated on --show-metrics) so users
+        always know what the turn cost. Tasteful: dim, single line.
+        """
+        if self.quiet or self.mode == MODE_JSON:
+            return
+        bits = [
+            f"iters={iters}",
+            f"in={in_tok}t",
+            f"out={out_tok}t",
+            f"wall={wall:.2f}s",
+        ]
+        if tool_calls:
+            bits.append(f"tools={tool_calls}")
+        if tool_errors:
+            bits.append(f"errs={tool_errors}")
+        line = " ".join(bits)
+        if self.mode == MODE_RICH:
+            c = self._rich_console()
+            c.print(f"  [dim][{line}][/dim]")
+        else:
+            self._stream.write(f"  [{line}]\n")
+
+    def session_pointer(self, session_id: str, path: str) -> None:
+        """Show the session ID at start of one-shot runs.
+
+        Lets users `open-code --resume-id <uuid>` later. In REPL mode
+        this is redundant (the banner already shows it).
+        """
+        if self.quiet or self.mode == MODE_JSON:
+            return
+        if self.mode == MODE_RICH:
+            c = self._rich_console()
+            c.print(
+                f"  [dim]session:[/dim] [yellow]{session_id[:8]}[/yellow]"
+                f"[dim]...  --resume-id {session_id}[/dim]"
+            )
+        else:
+            self._stream.write(
+                f"  session: {session_id} (resume with "
+                f"--resume-id {session_id})\n"
+            )
+
     def warn(self, msg: str) -> None:
         """Non-fatal warning."""
         if self.mode == MODE_JSON:

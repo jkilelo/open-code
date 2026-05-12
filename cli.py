@@ -520,6 +520,10 @@ def main(argv: list[str] | None = None) -> int:
     if session is None:
         session = store.create(str(cwd), args.model, task)
 
+    # Show session ID so the user knows what to `--resume-id` later.
+    if hasattr(ui, "session_pointer"):
+        ui.session_pointer(session.id, str(session.path))
+
     try:
         exit_code, metrics = run_loop(
             task=task_expanded,
@@ -537,6 +541,18 @@ def main(argv: list[str] | None = None) -> int:
             is_repl=False,
             ui=ui,
         )
+        # Always-on concise turn summary (every run knows what it
+        # cost). --show-metrics is now redundant but kept for the
+        # old verbose multi-line summary.
+        if hasattr(ui, "turn_summary"):
+            ui.turn_summary(
+                iters=metrics.get("iterations", 0),
+                in_tok=metrics.get("total_input_tokens", 0),
+                out_tok=metrics.get("total_output_tokens", 0),
+                wall=metrics.get("wall_seconds", 0.0),
+                tool_calls=metrics.get("tool_calls", 0),
+                tool_errors=metrics.get("tool_errors", 0),
+            )
     finally:
         if mcp_client is not None:
             mcp_client.shutdown()

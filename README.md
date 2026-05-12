@@ -16,6 +16,10 @@ output. Pipe it (`open-code "task" | tee log`) and the output
 auto-degrades to pure ASCII. Pass `--print` and you get one JSON
 event per line, suitable for IDE integrations or CI scripts.
 
+**Hands-on tutorial:** [`LEARN.md`](LEARN.md) -- progressive walkthrough
+with 10 standalone copy-paste-runnable scenarios. Start there if
+this is your first time with open-code.
+
 ## What you get
 
 - **REPL + one-shot** modes (`python open_code.py` vs `python open_code.py "task"`)
