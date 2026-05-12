@@ -805,13 +805,21 @@ class LiveStatusPanel:
         self._start_time = _time.perf_counter()
         # transient=True so the panel disappears cleanly on .stop().
         # The final summary is printed separately by ui.turn_summary.
+        #
+        # CRITICAL: redirect_stdout/stderr MUST be True (the default).
+        # Without redirection, any sys.stdout.write / sys.stderr.write
+        # call (the streaming model response, tool result prints,
+        # checkpoint messages, etc.) lands at the cursor position --
+        # which Live owns -- and gets overwritten on the next refresh.
+        # First real-terminal test of v0.27.1 hit this: panel rendered
+        # the first row, then the entire model response was eaten.
+        # With redirect=True, writes are buffered through Rich's
+        # Console and rendered cleanly ABOVE the Live area.
         self._live = Live(
             self._render(),
             console=self._console,
             refresh_per_second=4,
             transient=True,
-            redirect_stdout=False,
-            redirect_stderr=False,
         )
         self._live.start()
         return self

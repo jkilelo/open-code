@@ -251,6 +251,20 @@ assert isinstance(p, UI_MOD.NoOpPanel), (
 print("[PASS] LiveStatusPanel: non-TTY auto-degrades to NoOpPanel")
 
 
+# LiveStatusPanel redirect-flag regression (real-terminal bug from
+# v0.27.1: panel rendered first row, then model response was eaten
+# because redirect_stdout=False meant streamed writes hit the cursor
+# Live was managing). Source-level assertion: don't ship redirect=False.
+import inspect
+panel_src = inspect.getsource(UI_MOD.LiveStatusPanel.start)
+assert "redirect_stdout=False" not in panel_src, (
+    "v0.27.1 regression: Live(redirect_stdout=False) eats streamed "
+    "model text + tool prints. Defaults must be used (True)."
+)
+assert "redirect_stderr=False" not in panel_src
+print("[PASS] LiveStatusPanel: stdout/stderr redirect not disabled")
+
+
 # token formatter
 assert UI_MOD._fmt_tokens(0) == "0"
 assert UI_MOD._fmt_tokens(999) == "999"

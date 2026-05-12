@@ -577,9 +577,27 @@ User asked: can we borrow newer terminal-UI patterns (fixed sections with dynami
 | 4 new probes in `probe_ui.py`: plain mode + json mode + env-disable + non-TTY auto-degrade | [OK] |
 | `_fmt_tokens` helper for compact display (12.3K / 1.2M) | [OK] |
 
-ASCII guard caught two `·` chars in source during development -- swapped to `|` separators. Source stays 7-bit clean per the v0.24.4 invariant.
+ASCII guard caught two `.` chars in source during development -- swapped to `|` separators. Source stays 7-bit clean per the v0.24.4 invariant.
 
 **v0.27.1 ships [OK].** 48/48 probes (12 in probe_ui). ASCII pure. Security 54/54.
+
+---
+
+## v0.27.2 -- 2026-05-12 (real-terminal bug: panel ate output)
+
+User ran v0.27.1 in PowerShell for the first time. Panel rendered cyan border + row 1; everything else (model response, tool calls, summary) vanished. Clean exit, no error -- the live area silently overwrote every output write.
+
+Root cause: `ui.LiveStatusPanel.start` constructed `Live(..., redirect_stdout=False, redirect_stderr=False)`. Rich's Live defaults to True for both because writes need to flow through Rich's Console to be rendered above the live area. With redirect=False, streamed model text + tool prints hit the raw fd at the cursor (which Live owns) and get destroyed on the next refresh.
+
+| Item | Status |
+|------|--------|
+| Drop the override -- use Rich Live defaults (redirect_stdout/stderr=True) | [OK] |
+| Source-inspection regression probe asserts `redirect_stdout=False` / `redirect_stderr=False` are NOT in `LiveStatusPanel.start` source | [OK] |
+| ASCII encoding sweep -- 2 leftover `·` chars in gap-log.md + runs/v0.27.1.md normalized | [OK] |
+
+The class of bug (only surfaces in a real TTY) is exactly what probes can't catch. Lesson: live-run validation matters; the brutal-review discipline applies to UX features too.
+
+**v0.27.2 ships [OK].** 48/48 probes (13 in probe_ui). ASCII pure. Security 54/54.
 
 ## Remaining [WARN] (carried to v0.15+)
 
