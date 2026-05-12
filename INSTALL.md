@@ -1,5 +1,12 @@
 # Installing the kit into a new project
 
+> **Not the open-code install guide.** This document covers the
+> **persona-mvp-kit** (the development methodology + Claude Code
+> hooks/skills/agents bundle that open-code was BUILT with). If you
+> want to install and run the open-code CLI agent, see [`README.md`](README.md).
+> If you want to adopt the kit's development methodology for your
+> own project, read on.
+
 The kit is a directory tree. Copy it into your project's root,
 preserving the structure.
 

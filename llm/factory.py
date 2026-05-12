@@ -11,7 +11,10 @@ from .protocol import LLMClient
 # Default model per provider when settings.llm.model is unset.
 # Fast, cheap defaults; callers override for quality.
 DEFAULT_MODELS: dict[str, str] = {
-    "gemini": "gemini-3.1-flash-lite",
+    # Matches open_code.DEFAULT_MODEL so a settings-less startup uses
+    # the same model name end-to-end. The non-preview alias
+    # `gemini-3.1-flash-lite` is in MODEL_FALLBACK_CHAIN.
+    "gemini": "gemini-3.1-flash-lite-preview",
     "anthropic": "claude-haiku-4-5",
     "openai": "gpt-5-mini",          # gpt-5.5-mini not yet GA on standard tier
     "openai_chat": "gpt-5-mini",

@@ -4,21 +4,72 @@ An LLM-agnostic terminal coding agent. Like Claude Code, with a
 pluggable backend (Gemini / Anthropic / OpenAI), ~6500 lines of
 pure-Python source, and a deliberately small footprint.
 
-```
-pip install -r requirements.txt
-# Pick ONE provider (install only the SDK you'll use):
-pip install google-genai   &&  export GEMINI_API_KEY=...     # https://aistudio.google.com/app/apikey
-pip install anthropic      &&  export ANTHROPIC_API_KEY=...  # https://console.anthropic.com/
-pip install openai         &&  export OPENAI_API_KEY=...     # https://platform.openai.com/api-keys
+```bash
+pip install -r requirements.txt    # core deps + google-genai (default)
+
+# Then add a key. .env is the friendliest path (auto-loaded
+# cross-platform via python-dotenv; no shell quirks).
+cat >> .env <<'EOF'
+GEMINI_API_KEY=your-key-here
+EOF
+# Get a Gemini key: https://aistudio.google.com/app/apikey
+
 python open_code.py
 ```
 
-Gemini is the default. Switch providers via
-`.open-code/settings.json -> "llm": {"provider": "anthropic"}` (or
-`"openai"`). The factory lazy-imports adapters, so you only pay for
-the SDKs you actually use. See [`llm/`](llm/) for the full neutral
-protocol + per-provider translation; [`runs/2026-05-12-llm-design.md`](runs/2026-05-12-llm-design.md)
+Prefer environment exports? Pick the shell:
+
+```bash
+export GEMINI_API_KEY=...                   # bash / zsh / Git Bash
+```
+
+```powershell
+$env:GEMINI_API_KEY = "..."                 # PowerShell
+```
+
+```cmd
+set GEMINI_API_KEY=...                      :: cmd.exe
+```
+
+**Switch to Anthropic or OpenAI:** install the SDK, drop the key in
+`.env`, add an `llm` block to `.open-code/settings.json`:
+
+```bash
+pip install "anthropic>=0.101.0"
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
+mkdir -p .open-code && cat > .open-code/settings.local.json <<'EOF'
+{"llm": {"provider": "anthropic", "model": "claude-haiku-4-5"}}
+EOF
+# https://console.anthropic.com/  for the key
+```
+
+```bash
+pip install "openai>=2.36.0"
+echo "OPENAI_API_KEY=sk-proj-..." >> .env
+mkdir -p .open-code && cat > .open-code/settings.local.json <<'EOF'
+{"llm": {"provider": "openai", "model": "gpt-5-mini"}}
+EOF
+# https://platform.openai.com/api-keys  for the key
+```
+
+The factory lazy-imports adapters, so you only pay for the SDKs you
+actually install. See [`llm/`](llm/) for the full neutral protocol +
+per-provider translation; [`runs/2026-05-12-llm-design.md`](runs/2026-05-12-llm-design.md)
 documents the 3-provider research that shaped the interface.
+
+**Verify your setup** before the first real session (catches missing
+SDKs, wrong keys, network reach):
+
+```bash
+py -3.13 tests/_live_gemini_check.py        # 3 protocol tests
+py -3.13 tests/_live_anthropic_check.py     # 6 tests
+py -3.13 tests/_live_openai_check.py        # 6 tests
+py -3.13 tests/_live_openai_chat_check.py   # 6 tests
+```
+
+Each script loads the relevant key from `open-code/.env` OR
+`../ai_agents/.env` (workspace siblings) and exercises non-streaming
++ streaming + tool round-trips + structured output + embeddings.
 
 That drops you into a REPL with persistent history, autosuggest from
 your prior prompts, tab-complete on slash commands, and Rich-styled
@@ -191,7 +242,7 @@ Switch providers by changing the `llm` block. Supported values:
 
 | Provider | `llm.provider` | Default model       | API key env var      | SDK        | Verified  |
 |----------|----------------|---------------------|----------------------|------------|-----------|
-| Gemini   | `"gemini"`     | `gemini-3.1-flash-lite` | `GEMINI_API_KEY`     | `google-genai` >= 2.1.0 | full REPL + tools + resume + structured + embed (v0.30.0) |
+| Gemini   | `"gemini"`     | `gemini-3.1-flash-lite-preview` | `GEMINI_API_KEY`     | `google-genai` >= 2.1.0 | full REPL + tools + resume + structured + embed (v0.30.0) |
 | Anthropic| `"anthropic"`  | `claude-haiku-4-5`  | `ANTHROPIC_API_KEY`  | `anthropic` >= 0.101.0 | full REPL + tools + thinking + adapter smoke 6/6 (v0.30.2) |
 | OpenAI Responses (modern) | `"openai"` | `gpt-5-mini` | `OPENAI_API_KEY` | `openai` >= 2.36.0 | full REPL + tools + structured + embed + reasoning_effort (v0.30.3) |
 | OpenAI Chat Completions (legacy / OSS-compat) | `"openai_chat"` | `gpt-5-mini` | `OPENAI_API_KEY` | `openai` >= 2.36.0 | full REPL + tools + structured + embed + reasoning_effort (v0.30.4) |
@@ -204,6 +255,44 @@ See `runs/2026-05-12-v0.30.{0,2,3,4}.md` for the live transcripts.
 Re-run a provider's smoke any time with `py -3.13
 tests/_live_<provider>_check.py`.
 
+### `openai` vs `openai_chat` -- which to pick
+
+Both adapters use the same `openai` SDK; the difference is the API
+surface:
+
+| Pick `"openai"` (Responses API, modern -- recommended) | Pick `"openai_chat"` (Chat Completions, legacy / compat) |
+|---|---|
+| Native OpenAI account                                   | Pointing at an OSS-compat backend that only speaks Chat Completions |
+| First-class agent loop, built-in tools, persistent reasoning | Groq, vLLM, Together, Anthropic-OpenAI-shim, Azure OpenAI Chat deployments |
+| Structured output via `text.format.json_schema`         | Structured output via `response_format.json_schema`     |
+| Tool call shape: flat `{type:"function", name, parameters}` | Tool call shape: nested `{type:"function", function:{name, parameters}}` |
+
+Use `extra={"base_url": "..."}` in your `llm` block to route
+`openai_chat` at a non-OpenAI host:
+
+```json
+{"llm": {"provider": "openai_chat",
+          "model":    "llama-3.3-70b-versatile",
+          "extra":    {"base_url": "https://api.groq.com/openai/v1"}}}
+```
+
+### Overriding the model for one invocation
+
+Priority chain (highest wins): `--model` CLI flag -> `OPEN_CODE_MODEL`
+env var -> `settings.llm.model` -> legacy `settings.model` ->
+`DEFAULT_MODEL` (`gemini-3.1-flash-lite-preview`).
+
+```bash
+python open_code.py --model gemini-3.1-pro-preview "harder task"
+OPEN_CODE_MODEL=claude-opus-4-7 python open_code.py "expensive turn"
+```
+
+The provider stays whatever `settings.llm.provider` says -- only the
+model name changes. Confusing pair (Gemini provider with a Claude
+model name, etc.) just fails on the wire.
+
+### Provider-specific knobs
+
 Override the env var name via `llm.api_key_env`. Pass provider-
 specific knobs (Gemini `safety_settings`, Anthropic `betas`, OpenAI
 `previous_response_id`, etc.) via `llm.extra`. The neutral protocol
@@ -211,6 +300,36 @@ specific knobs (Gemini `safety_settings`, Anthropic `betas`, OpenAI
 (Gemini's `thought_signature`, Anthropic's thinking `signature`,
 OpenAI's reasoning `encrypted_content`) through JSONL storage, so
 `--resume` works across providers without losing reasoning context.
+
+### Gotchas worth knowing
+
+- **gpt-5 reasoning models eat token budget invisibly.** Even at
+  default `thinking_effort`, `gpt-5-mini` allocates ~128 reasoning
+  tokens per call before producing any text. If `max_output_tokens`
+  is set tight (e.g. 256), structured-output calls come back empty
+  because reasoning consumed the budget. Either set
+  `thinking_effort: "minimal"` for non-reasoning tasks or budget
+  >= 1024 tokens. Reasoning usage shows up as
+  `usage.completion_tokens_details.reasoning_tokens` in the raw
+  response, and `result.usage.reasoning_tokens` in the neutral type.
+
+- **Anthropic `max_tokens` is mandatory** and bounds the *total*
+  output (thinking + text). The adapter defaults to 4096; bumps to
+  16384 when `thinking_effort != "off"` so a thinking budget has
+  room. If you set a tiny `max_output_tokens`, expect truncation.
+
+- **OpenAI `gpt-5.5-*` aliases are not yet GA** on the standard
+  tier. The Responses guide foregrounds them but `client.models.list()`
+  may not return them. Fall back to `gpt-5-mini` / `gpt-5.4-mini`.
+
+- **Anthropic `claude-haiku-4-5` rejects `thinking={"type":"adaptive"}`**
+  even though docs imply it should support it. The adapter detects
+  Haiku and falls through to `enabled+budget_tokens` automatically.
+
+- **Resume preserves provider-specific state.** Switching the active
+  provider between sessions is fine; switching MID-session breaks
+  reasoning context (the new provider can't decrypt the prior
+  provider's signatures). Use `/clear` after a provider switch.
 
 Permission rules: `Tool` (any args), `Tool(specifier)` (fnmatch on
 arg values), `Tool(/regex/)` (regex search). Evaluation order is

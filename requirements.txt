@@ -1,4 +1,13 @@
-google-genai>=1.75.0
+# Always required.
 python-dotenv>=1.0.0
 rich>=14.0.0
 prompt_toolkit>=3.0.0
+
+# Default LLM provider (Gemini). Switch via .open-code/settings.json
+# -> "llm": {"provider": "anthropic"} or "openai" / "openai_chat".
+# Adapters lazy-import; you only need the SDK for the provider you use.
+google-genai>=2.1.0
+
+# Optional -- install only if you set the matching provider in settings.
+# pip install "anthropic>=0.101.0"
+# pip install "openai>=2.36.0"
