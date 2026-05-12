@@ -189,12 +189,18 @@ Example `.open-code/settings.json` (Gemini default; pick whichever
 
 Switch providers by changing the `llm` block. Supported values:
 
-| Provider | `llm.provider` | Default model       | API key env var      |
-|----------|----------------|---------------------|----------------------|
-| Gemini   | `"gemini"`     | `gemini-3.1-flash-lite` | `GEMINI_API_KEY`     |
-| Anthropic| `"anthropic"`  | `claude-haiku-4-5`  | `ANTHROPIC_API_KEY`  |
-| OpenAI Responses (modern) | `"openai"` | `gpt-5-mini` | `OPENAI_API_KEY` |
-| OpenAI Chat Completions (legacy / OSS-compat) | `"openai_chat"` | `gpt-5-mini` | `OPENAI_API_KEY` |
+| Provider | `llm.provider` | Default model       | API key env var      | SDK        | Verified  |
+|----------|----------------|---------------------|----------------------|------------|-----------|
+| Gemini   | `"gemini"`     | `gemini-3.1-flash-lite` | `GEMINI_API_KEY`     | `google-genai` >= 2.1.0 | full REPL + tools + resume + structured + embed (v0.30.0) |
+| Anthropic| `"anthropic"`  | `claude-haiku-4-5`  | `ANTHROPIC_API_KEY`  | `anthropic` >= 0.101.0 | full REPL + tools + thinking + adapter smoke 6/6 (v0.30.2) |
+| OpenAI Responses (modern) | `"openai"` | `gpt-5-mini` | `OPENAI_API_KEY` | `openai` >= 2.36.0 | full REPL + tools + structured + embed + reasoning_effort (v0.30.3) |
+| OpenAI Chat Completions (legacy / OSS-compat) | `"openai_chat"` | `gpt-5-mini` | `OPENAI_API_KEY` | `openai` >= 2.36.0 | adapter compiles + structurally accepted; no live REPL run yet |
+
+"Verified" means a real REPL session against the production API on
+that provider produced correct multi-iteration tool dispatch with
+identifier round-trip (Gemini `thought_signature`, Anthropic
+`tool_use_id`, OpenAI Responses `call_id`). See `runs/2026-05-12-v0.30.{0,2,3}.md`
+for the live transcripts.
 
 Override the env var name via `llm.api_key_env`. Pass provider-
 specific knobs (Gemini `safety_settings`, Anthropic `betas`, OpenAI
