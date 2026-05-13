@@ -539,7 +539,22 @@ def _render_tool_call(name: str, args: dict[str, Any]) -> str:
 
 def _render_tool_result(name: str, result: dict[str, Any]) -> str:
     if not result.get("ok", False):
-        return f"  [X] {name} -> error: {result.get('error', 'unknown')}"
+        # run_shell non-zero exit returns {ok:False, exit_code, stdout,
+        # stderr} -- no `error` key. Surface stderr (or stdout fallback)
+        # so triage is possible without re-reading the JSONL transcript.
+        if name == "run_shell" and "exit_code" in result:
+            tail = result.get("stderr") or result.get("stdout") or ""
+            tail = _short(tail.strip(), 80) or "(no output)"
+            return (
+                f"  [X] run_shell -> exit={result['exit_code']}, "
+                f"stderr: {tail!r}"
+            )
+        err = result.get("error")
+        if not err:
+            # Fall back to any human-readable field the tool author
+            # provided rather than the literal string "unknown".
+            err = result.get("stderr") or result.get("message") or "unknown"
+        return f"  [X] {name} -> error: {_short(str(err).strip(), 120)}"
     if name == "read_file":
         return f"  [OK] read_file -> {result.get('size', '?')} bytes"
     if name == "write_file":

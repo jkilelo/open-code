@@ -324,4 +324,40 @@ assert p.tool_call_id == "call_persist_xyz", p.tool_call_id
 print("  [PASS] tool_result round-trip preserves role + tool_call_id")
 
 
-print("\nOK -- integration probes passed (catches the v0.30.2/.3 regression class).")
+# ===========================================================================
+# Test 6: tool-result display surfaces stderr when run_shell exits non-zero
+# (catches the "error: unknown" regression from the v0.33.0 dogfood run)
+# ===========================================================================
+print("Test 6: run_shell non-zero exit displays stderr, not 'unknown'", flush=True)
+from open_code import _render_tool_result
+
+# tool_run_shell on a failed shell command returns this exact shape:
+fail_result = {
+    "ok": False,
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "'head' is not recognized as an internal or external command,"
+              "\noperable program or batch file.\n",
+}
+rendered = _render_tool_result("run_shell", fail_result)
+# Must contain the exit code AND the stderr signature -- never just "unknown".
+assert "exit=1" in rendered, f"missing exit code in: {rendered!r}"
+assert "head" in rendered or "not recognized" in rendered, (
+    f"stderr not surfaced; got: {rendered!r}. The v0.33.0 dogfood run "
+    f"showed 'error: unknown' here because the display path defaulted to "
+    f"result.get('error', 'unknown') when run_shell's shape is "
+    f"{{exit_code, stdout, stderr}} (no 'error' key)."
+)
+assert "unknown" not in rendered, (
+    f"display still falls back to 'unknown': {rendered!r}"
+)
+print(f"  [PASS] run_shell exit=1 display: {rendered!r}")
+
+# Negative test: a real "error: <message>" result should still work
+generic_err = {"ok": False, "error": "permission denied (path sandbox)"}
+rendered2 = _render_tool_result("write_file", generic_err)
+assert "permission denied" in rendered2, rendered2
+print(f"  [PASS] generic error display preserved: {rendered2!r}")
+
+
+print("\nOK -- integration probes passed (catches the v0.30.2/.3 + v0.33.0 regression class).")
