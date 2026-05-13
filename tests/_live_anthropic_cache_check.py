@@ -18,6 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import _smoke_setup  # noqa: F401  -- UTF-8 stdout/stderr on Windows
+
 try:
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
