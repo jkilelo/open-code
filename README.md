@@ -301,6 +301,89 @@ specific knobs (Gemini `safety_settings`, Anthropic `betas`, OpenAI
 OpenAI's reasoning `encrypted_content`) through JSONL storage, so
 `--resume` works across providers without losing reasoning context.
 
+### Corporate Vertex AI (v0.34+)
+
+Some corporate networks route Gemini through Vertex AI behind a
+gateway and authenticate with short-lived OAuth2 tokens fetched
+from an internal helper (e.g. `helix auth access-token print -a`).
+Opt in via `settings.llm.extra.vertex`:
+
+```json
+{
+  "llm": {
+    "provider": "gemini",
+    "model":    "gemini-3.1-flash-lite-preview",
+    "extra": {
+      "vertex": {
+        "enabled": true,
+        "project":  "my-gcp-project",
+        "location": "global",
+        "base_url": "https://corp-gateway.example.com",
+        "credentials_command": "helix auth access-token print -a"
+      }
+    }
+  }
+}
+```
+
+Equivalent to the bare SDK call you'd write yourself:
+
+```python
+from google.genai import Client, types
+from google.oauth2.credentials import Credentials
+import subprocess
+
+Client(
+    vertexai=True,
+    project="my-gcp-project",
+    location="global",
+    credentials=Credentials(
+        subprocess.check_output(
+            "helix auth access-token print -a", shell=True,
+        ).decode().strip()
+    ),
+    http_options=types.HttpOptions(base_url="https://corp-gateway.example.com"),
+)
+```
+
+`vertex.*` keys (all under `llm.extra.vertex`):
+
+| Key                   | Required | Notes                                                                 |
+|-----------------------|----------|-----------------------------------------------------------------------|
+| `enabled`             | yes      | Must be `true` to route through Vertex. Default `false` -> Developer API path. |
+| `project`             | yes      | GCP project ID (quota + billing target).                              |
+| `location`            | -        | Region, e.g. `"us-central1"` or `"global"`. Default `"us-central1"`. |
+| `base_url`            | -        | Corporate gateway URL. Maps to `types.HttpOptions(base_url=...)`.    |
+| `api_version`         | -        | `"v1"`, `"v1alpha"`, etc. Maps to `HttpOptions(api_version=...)`.    |
+| `headers`             | -        | Extra HTTP headers (dict). Maps to `HttpOptions(headers=...)`.       |
+| `timeout`             | -        | Request timeout in milliseconds (per google-genai).                  |
+| `credentials_command` | -*       | Shell command whose stdout is the OAuth2 access token.                |
+| `credentials_file`    | -*       | Service-account JSON path (alternative to `credentials_command`).    |
+| `scopes`              | -        | OAuth2 scopes list. Default `["https://www.googleapis.com/auth/cloud-platform"]`. |
+
+\* Provide exactly one of `credentials_command` or `credentials_file`.
+Omit both to fall back to Application Default Credentials
+(`google.auth.default()`), useful when `GOOGLE_APPLICATION_CREDENTIALS`
+or workload-identity provides the token.
+
+**Token refresh.** When `credentials_command` is used, the adapter
+subclasses `google.oauth2.credentials.Credentials` so the SDK's
+transport re-runs your command when the token is about to expire
+(default TTL is 50 minutes -- well under the standard 1-hour
+access-token lifetime). Long REPL sessions don't 401 mid-task.
+
+**No GEMINI_API_KEY required.** When `vertex.enabled` is true, the
+factory skips the `GEMINI_API_KEY` check. Credentials come from
+your command / file / ADC instead.
+
+**Wire verification.** `py -3.13 tests/probe_gemini_vertex.py`
+runs the no-network probe (monkeypatches `genai.Client` and
+`subprocess.check_output`) and checks: project/location/credentials
+get to the SDK, HttpOptions carries `base_url`, refresh re-runs the
+command, missing-project + dual-credential + empty-stdout all
+surface as `LLMConfigError`, the `vertex` block is consumed and
+doesn't leak into per-call coercion.
+
 ### Anthropic prompt caching (v0.31+)
 
 Opt in via `settings.llm.extra.cache.enabled = true`. The adapter

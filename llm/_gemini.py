@@ -5,11 +5,21 @@ on every call. The only file in the package that imports
 `from google import genai`. The factory keeps it lazy so users on
 other providers don't need google-genai installed.
 
+Two auth modes, picked at construction time:
+
+  1. Gemini Developer API (default): api_key from AI Studio.
+  2. Vertex AI (corporate): extra={"vertex": {...}}. Lets you run
+     against a corporate gateway with OAuth2 access tokens fetched
+     from a shell command (e.g. `helix auth access-token print -a`),
+     a service-account JSON file, or Application Default Credentials.
+
 SDK reference: google-genai 2.1.0 (verified 2026-05-12).
 """
 from __future__ import annotations
 
+import datetime
 import json
+import subprocess
 from typing import Any, Iterator
 
 from google import genai
@@ -18,11 +28,23 @@ from google.genai import types as _gt
 
 from .base import BaseLLMClient, StreamAccumulator
 from .errors import (
-    LLMAuthenticationError, LLMBadRequestError, LLMCallError,
+    LLMAuthenticationError, LLMBadRequestError, LLMCallError, LLMConfigError,
     LLMNotFoundError, LLMPermissionError, LLMRateLimitError,
     LLMSafetyError, LLMServerError,
 )
 from .types import AskResult, Message, Part, StreamChunk, ToolDecl, Usage
+
+
+# Default OAuth2 scope when Vertex mode is enabled. Corporate setups
+# almost always want cloud-platform; surface the override anyway.
+_DEFAULT_VERTEX_SCOPES: tuple[str, ...] = (
+    "https://www.googleapis.com/auth/cloud-platform",
+)
+
+# How long a Vertex access token from a shell command is presumed to
+# last. Google access tokens are 1h by default; we expire ours a bit
+# earlier so google-auth refreshes proactively before a 401.
+_COMMAND_TOKEN_TTL = datetime.timedelta(minutes=50)
 
 
 # thinking_effort -> Gemini 3.x ThinkingLevel enum
@@ -52,17 +74,238 @@ _SAFETY_FINISH = frozenset({
 })
 
 
+def _resolve_vertex_credentials(
+    cfg: dict[str, Any], scopes: list[str] | tuple[str, ...],
+) -> Any:
+    """Pick the right google.auth.credentials.Credentials for Vertex mode.
+
+    Returns None to let google-auth fall back to Application Default
+    Credentials (ADC). Raises LLMConfigError on misconfiguration.
+    """
+    cmd = cfg.get("credentials_command")
+    sa_file = cfg.get("credentials_file")
+
+    if cmd and sa_file:
+        raise LLMConfigError(
+            'vertex config: choose either "credentials_command" or '
+            '"credentials_file", not both.'
+        )
+
+    scope_list = list(scopes)
+    if cmd:
+        if not isinstance(cmd, str) or not cmd.strip():
+            raise LLMConfigError(
+                'vertex.credentials_command must be a non-empty shell '
+                'command string (e.g. "helix auth access-token print -a").'
+            )
+        return _CommandCredentials(cmd.strip(), scopes=scope_list)
+
+    if sa_file:
+        try:
+            from google.oauth2 import service_account
+        except ImportError as exc:
+            raise LLMConfigError(
+                "vertex.credentials_file requires google-auth's "
+                "service_account module; install google-auth."
+            ) from exc
+        return service_account.Credentials.from_service_account_file(
+            sa_file, scopes=scope_list,
+        )
+
+    # ADC: returning None tells genai.Client to call google.auth.default().
+    return None
+
+
+def _build_http_options(cfg: dict[str, Any]) -> "_gt.HttpOptions | None":
+    """Translate vertex.* HTTP knobs into a types.HttpOptions, or None.
+
+    Recognized keys (all optional):
+      base_url, api_version, headers, timeout, base_url_resource_scope
+    """
+    keys = (
+        "base_url", "api_version", "headers", "timeout",
+        "base_url_resource_scope",
+    )
+    opts = {k: cfg[k] for k in keys if cfg.get(k) is not None}
+    if not opts:
+        return None
+    try:
+        return _gt.HttpOptions(**opts)
+    except TypeError as exc:
+        # SDK may not know one of these on older versions -- drop the
+        # unknown key and retry once with a clear hint to the user.
+        raise LLMConfigError(
+            f"vertex http_options rejected by google-genai: {exc}. "
+            f"Keys passed: {sorted(opts)}. Upgrade google-genai or "
+            f"remove the unsupported key."
+        ) from exc
+
+
+class _CommandCredentials:
+    """OAuth2 credentials backed by a shell command.
+
+    Mirrors the corporate pattern:
+        Credentials(subprocess.check_output("helix auth access-token "
+                                            "print -a", shell=True)
+                    .decode().strip())
+
+    Subclasses `google.oauth2.credentials.Credentials` so the
+    google-auth transport treats it like any other refreshable
+    credential. We override refresh() to re-run the shell command
+    when google-auth detects the token is near expiry, so long
+    REPL sessions don't 401 after the initial 1h.
+    """
+
+    def __new__(
+        cls, command: str, *, scopes: list[str] | None = None,
+    ) -> "_CommandCredentials":
+        # Lazy-import + dynamic subclass so importing this module
+        # never requires google-auth-oauthlib for the Developer-API
+        # path. Cache the resolved subclass on the class for reuse.
+        impl = getattr(cls, "_impl_cls", None)
+        if impl is None:
+            try:
+                from google.oauth2.credentials import Credentials
+            except ImportError as exc:
+                raise LLMConfigError(
+                    "vertex.credentials_command requires google-auth "
+                    "(google.oauth2.credentials.Credentials)."
+                ) from exc
+
+            class _Impl(Credentials):
+                def __init__(
+                    self, command: str, *, scopes: list[str] | None = None,
+                ) -> None:
+                    super().__init__(token=None, scopes=scopes)
+                    self._command = command
+                    self._fetch()  # initial fetch so .token is set
+
+                def _fetch(self) -> None:
+                    try:
+                        out = subprocess.check_output(
+                            self._command, shell=True, text=True,
+                            stderr=subprocess.PIPE,
+                        )
+                    except subprocess.CalledProcessError as exc:
+                        stderr = (exc.stderr or "").strip()[:400]
+                        raise LLMConfigError(
+                            f"vertex.credentials_command exited "
+                            f"{exc.returncode}: {self._command!r}. "
+                            f"stderr: {stderr!r}"
+                        ) from exc
+                    except FileNotFoundError as exc:
+                        raise LLMConfigError(
+                            f"vertex.credentials_command not found: "
+                            f"{self._command!r} ({exc})"
+                        ) from exc
+                    token = (out or "").strip()
+                    if not token:
+                        raise LLMConfigError(
+                            f"vertex.credentials_command produced empty "
+                            f"output: {self._command!r}"
+                        )
+                    self.token = token
+                    # google-auth compares expiry to a naive UTC clock,
+                    # so we strip tzinfo after computing on aware now().
+                    self.expiry = (
+                        datetime.datetime.now(datetime.timezone.utc)
+                        .replace(tzinfo=None) + _COMMAND_TOKEN_TTL
+                    )
+
+                def refresh(self, request: Any) -> None:  # noqa: ARG002
+                    self._fetch()
+
+            cls._impl_cls = _Impl  # type: ignore[attr-defined]
+            impl = _Impl
+        return impl(command, scopes=scopes)  # type: ignore[return-value]
+
+
 class GeminiClient(BaseLLMClient):
-    """Adapter implementing LLMClient against google-genai 2.x."""
+    """Adapter implementing LLMClient against google-genai 2.x.
+
+    Construction has two paths:
+
+      - API-key (default):
+            GeminiClient(api_key="AI...", extra={...})
+        Hits generativelanguage.googleapis.com via the Developer API.
+
+      - Vertex AI (corporate):
+            GeminiClient(api_key=None, extra={"vertex": {
+                "enabled": True,
+                "project": "my-gcp-project",
+                "location": "us-central1",            # or "global"
+                "base_url": "https://corp-gw...",     # optional, gateway
+                "api_version": "v1",                   # optional
+                "headers": {"X-Tenant": "..."},       # optional
+                "credentials_command": "helix auth access-token print -a",
+                # OR: "credentials_file": "/path/to/service-account.json"
+                # OR: omit both -> fall back to Application Default Credentials
+                "scopes": ["https://www.googleapis.com/auth/cloud-platform"],
+            }})
+        Mirrors the corporate snippet:
+          Client(vertexai=True, project=..., location=..., credentials=...,
+                 http_options=types.HttpOptions(base_url=...))
+        The `vertex` block is consumed at construction and removed
+        from `_extra` so it never leaks into per-call coercion.
+    """
 
     provider: str = "gemini"
 
     def __init__(
-        self, *, api_key: str, extra: dict[str, Any] | None = None,
+        self, *, api_key: str | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         self._api_key = api_key
         self._extra = dict(extra) if extra else {}
-        self._client = genai.Client(api_key=api_key)
+        vertex_cfg = self._extra.pop("vertex", None)
+        if isinstance(vertex_cfg, dict) and vertex_cfg.get("enabled"):
+            self._client = self._build_vertex_client(vertex_cfg)
+        else:
+            if not api_key:
+                raise LLMConfigError(
+                    "GeminiClient: api_key required for the Developer API "
+                    "path. For corporate Vertex AI, pass "
+                    'extra={"vertex": {"enabled": True, ...}}.'
+                )
+            self._client = genai.Client(api_key=api_key)
+
+    @staticmethod
+    def _build_vertex_client(cfg: dict[str, Any]) -> "genai.Client":
+        """Construct a Vertex-mode genai.Client from a vertex.* config dict.
+
+        Required: project, location.
+        Credentials precedence (most explicit first):
+          1. credentials_command  -- run shell command, use stdout as
+             access token (subclass refresh() re-runs it as token ages)
+          2. credentials_file     -- service account JSON, scoped
+          3. neither              -- google.auth.default() (ADC)
+        """
+        project = cfg.get("project")
+        location = cfg.get("location") or "us-central1"
+        if not project:
+            raise LLMConfigError(
+                'vertex config requires "project" '
+                "(your GCP project ID for quota)."
+            )
+
+        scopes: list[str] = [
+            str(s) for s in (cfg.get("scopes") or _DEFAULT_VERTEX_SCOPES)
+        ]
+        credentials = _resolve_vertex_credentials(cfg, scopes)
+
+        client_kwargs: dict[str, Any] = {
+            "vertexai": True,
+            "project": project,
+            "location": location,
+        }
+        if credentials is not None:
+            client_kwargs["credentials"] = credentials
+
+        http_opts = _build_http_options(cfg)
+        if http_opts is not None:
+            client_kwargs["http_options"] = http_opts
+
+        return genai.Client(**client_kwargs)
 
     # ---- adapter hooks ----
 

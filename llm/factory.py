@@ -64,11 +64,22 @@ def make_llm_client(
             api_key = os.environ.get(env_name, "").strip() or None
 
     if provider == "gemini":
-        if not api_key:
+        # Corporate Vertex AI mode supplies credentials through
+        # extra.vertex.{credentials_command,credentials_file} or ADC,
+        # so the GEMINI_API_KEY check only applies to the Developer
+        # API path.
+        vertex_cfg: Any = extra.get("vertex")
+        vertex_enabled = bool(
+            isinstance(vertex_cfg, dict) and vertex_cfg.get("enabled"),
+        )
+        if not api_key and not vertex_enabled:
             raise LLMConfigError(
                 "GEMINI_API_KEY not set. Put it in a .env file in your "
                 "project, or export it. Get one at "
-                "https://aistudio.google.com/app/apikey"
+                "https://aistudio.google.com/app/apikey. "
+                'For corporate Vertex AI, set extra.vertex.enabled=true '
+                "and provide project/location/credentials_command in "
+                "settings.json (see README -> Corporate Vertex AI)."
             )
         try:
             from ._gemini import GeminiClient
